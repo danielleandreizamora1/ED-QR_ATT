@@ -15,7 +15,7 @@ export default function RegisterScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'student' | 'teacher' | 'admin'>('student');
+  const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +90,7 @@ export default function RegisterScreen() {
               <View style={styles.field}>
                 <Text style={styles.label}>I AM A…</Text>
                 <View style={styles.roleRow}>
-                  {(['student', 'teacher', 'admin'] as const).map((option) => (
+                  {(['student', 'teacher'] as const).map((option) => (
                     <Pressable
                       key={option}
                       onPress={() => setRole(option)}
@@ -100,12 +100,13 @@ export default function RegisterScreen() {
                       accessibilityState={{ selected: role === option }}
                     >
                       <Text style={[styles.roleChipText, role === option && styles.roleChipTextActive]}>
-                        {option === 'student' ? 'Student' : option === 'teacher' ? 'Teacher' : 'Admin'}
+                        {option === 'student' ? 'Student' : 'Teacher'}
                       </Text>
-                      <Text style={styles.roleIndex}>{option === 'student' ? '01' : option === 'teacher' ? '02' : '03'}</Text>
+                      <Text style={styles.roleIndex}>{option === 'student' ? '01' : '02'}</Text>
                     </Pressable>
                   ))}
                 </View>
+                <Text style={styles.roleHint}>Admin accounts are granted by an administrator — not self-registered.</Text>
               </View>
               {error && (
                 <View style={styles.errorWrap}>
@@ -204,5 +205,6 @@ const styles = StyleSheet.create({
   roleChipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
   roleChipText: { color: COLORS.textSecondary, fontWeight: '700', fontSize: 12 },
   roleChipTextActive: { color: COLORS.textOnPrimary, fontWeight: '800' },
+  roleHint: { color: COLORS.textSecondary, fontSize: 12 },
   roleIndex: { color: COLORS.textSecondary, fontSize: 10, fontFamily: 'monospace' },
 });

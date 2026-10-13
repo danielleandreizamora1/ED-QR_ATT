@@ -2,14 +2,17 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
 import { COLORS } from '@/constants/colors';
 import { useRole } from '@/lib/auth';
+import { canCreateEvents, canManageAll } from '@/lib/roles';
 
 export default function AppTabs() {
   const { role } = useRole();
+  const showEventTab = canCreateEvents(role);
+  const showAdminTab = canManageAll(role);
 
   return (
     <NativeTabs
       backgroundColor={COLORS.card}
-      indicatorColor={COLORS.surface}
+      indicatorColor={COLORS.primary}
       labelStyle={{ selected: { color: COLORS.primary } }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Events</NativeTabs.Trigger.Label>
@@ -35,8 +38,8 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
-      {/* Event tab: admin only — create/manage events + QR. */}
-      <NativeTabs.Trigger name="teacher" hidden={role !== 'admin'}>
+      {/* Event tab: teachers + admins — create/manage events + QR. */}
+      <NativeTabs.Trigger name="teacher" hidden={!showEventTab}>
         <NativeTabs.Trigger.Label>Event</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'calendar', selected: 'calendar' }}
@@ -45,7 +48,7 @@ export default function AppTabs() {
       </NativeTabs.Trigger>
 
       {/* Admin tab: administrators only — manage users/events/records/reports. */}
-      <NativeTabs.Trigger name="admin" hidden={role !== 'admin'}>
+      <NativeTabs.Trigger name="admin" hidden={!showAdminTab}>
         <NativeTabs.Trigger.Label>Admin</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'shield', selected: 'shield.fill' }}

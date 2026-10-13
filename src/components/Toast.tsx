@@ -74,5 +74,5 @@ const styles = StyleSheet.create({
   toastIcon: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
   iconWrap: { backgroundColor: '#FFFFFF', borderRadius: 999, padding: 2 },
   toastTitle: { flex: 1, color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
-  toastDetail: { color: '#E4E4E7', fontSize: 12 },
+  toastDetail: { color: '#E7E5E4', fontSize: 12 },
 });

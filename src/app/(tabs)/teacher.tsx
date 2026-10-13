@@ -15,6 +15,7 @@ import {
   createEvent,
   deleteEvent,
   getAllEvents,
+  getEventsByTeacher,
   setEventStatus,
   updateEvent,
   type CloudEvent,
@@ -22,6 +23,13 @@ import {
 } from '@/lib/events';
 import type { Role } from '@/lib/profiles';
 import { getProfile } from '@/lib/profiles';
+import { canCreateEvents } from '@/lib/roles';
+import {
+  getTeacherEventAttendance,
+  type TeacherEventAttendance,
+  type TeacherEventSummary,
+} from '@/lib/attendance';
+import { listAllAttendance } from '@/lib/admin';
 import { buildQRPayload } from '@/lib/qr';
 
 type Mode = 'create' | 'manage';
@@ -35,9 +43,11 @@ function formatDateTime(date: Date) {
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-// Admin only: Create an event • View events • Edit an event • Close/reopen
-// an event. Event fields: name, date, time (start/end pickers), venue,
-// description, status (open/closed).
+// Teacher + Admin: Create an event • View events • Edit an event •
+// Close/reopen an event • Generate event QR • Monitor attendance per
+// event • View attendance summaries. Event fields: name, date, time
+// (start/end pickers), venue, description, status (open/closed).
+// Teachers see only their own events; admins see every event.
 export default function TeacherScreen() {
   const { user } = useAuth();
   const [role, setRole] = useState<Role | null>(null);
@@ -63,6 +73,9 @@ export default function TeacherScreen() {
   const [editTitle, setEditTitle] = useState('');
   const [editVenue, setEditVenue] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  // Teacher capabilities: monitor attendance + view summaries per event.
+  const [summaries, setSummaries] = useState<TeacherEventSummary[]>([]);
+  const [attendanceDetail, setAttendanceDetail] = useState<TeacherEventAttendance | null>(null);
 
   const loadRole = useCallback(() => {
     if (!user) {
@@ -79,9 +92,41 @@ export default function TeacherScreen() {
   const loadEvents = useCallback(async () => {
     if (!user) return;
     setListLoading(true);
-    // Admin-only tab: admins see every event.
-    const rows = await getAllEvents();
+    // Teachers see their own events; admins see every event.
+    const profile = await getProfile(user.id);
+    const currentRole = profile?.role ?? 'student';
+    const rows =
+      currentRole === 'admin' ? await getAllEvents() : await getEventsByTeacher(user.id);
     setEvents(rows);
+    // Attendance summaries: teachers get per-event counts for their own
+    // events; admins get system-wide counts mapped onto every event.
+    if (currentRole === 'teacher') {
+      const teacherRows = await getTeacherEventAttendance(user.id);
+      setSummaries(
+        teacherRows.map((t) => ({
+          eventId: t.eventId,
+          eventCode: t.eventCode,
+          title: t.title,
+          attendeeCount: t.attendeeCount,
+        })),
+      );
+    } else if (currentRole === 'admin') {
+      const all = await listAllAttendance();
+      const counts: Record<string, number> = {};
+      for (const row of all) {
+        counts[row.eventCode] = (counts[row.eventCode] ?? 0) + 1;
+      }
+      setSummaries(
+        rows.map((e) => ({
+          eventId: e.id,
+          eventCode: e.event_code,
+          title: e.title,
+          attendeeCount: counts[e.event_code] ?? 0,
+        })),
+      );
+    } else {
+      setSummaries([]);
+    }
     setListLoading(false);
   }, [user]);
 
@@ -118,6 +163,12 @@ export default function TeacherScreen() {
   };
 
   const handleCreateEvent = async () => {
+    // RBAC: only teachers and admins may create events.
+    if (!canCreateEvents(role)) {
+      setMessage('Only teacher or admin accounts can create events.');
+      setPayload(null);
+      return;
+    }
     // Input validation (length/format checked here, ownership enforced by RLS).
     const codeError = validateEventCode(eventId);
     if (codeError) {
@@ -170,6 +221,38 @@ export default function TeacherScreen() {
     setEditTitle(item.title);
     setEditVenue(item.venue ?? '');
     setEditDescription(item.description ?? '');
+    // Monitor attendance: load the per-event attendee list for the detail view.
+    setAttendanceDetail(null);
+    if (user) {
+      void (async () => {
+        const rows = await getTeacherEventAttendance(user.id);
+        const mine = rows.find((r) => r.eventId === item.id);
+        if (mine) {
+          setAttendanceDetail(mine);
+          return;
+        }
+        // Admins viewing events they didn't create: fall back to
+        // system-wide rows filtered to this event.
+        if (role === 'admin') {
+          const all = await listAllAttendance();
+          const matches = all.filter((r) => r.eventCode === item.event_code);
+          setAttendanceDetail({
+            eventId: item.id,
+            eventCode: item.event_code,
+            title: item.title,
+            startTime: item.start_time,
+            endTime: item.end_time,
+            attendeeCount: matches.length,
+            attendees: matches.map((r) => ({
+              studentId: r.id,
+              studentName: r.studentName,
+              studentEmail: r.studentEmail,
+              scannedAt: r.scannedAt,
+            })),
+          });
+        }
+      })();
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -226,12 +309,12 @@ export default function TeacherScreen() {
     return <LoadingState message="Checking your account…" />;
   }
 
-  if (role !== 'admin') {
+  if (!canCreateEvents(role)) {
     return (
       <View style={styles.lockScreen}>
         <SymbolView name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }} tintColor={COLORS.primary} size={42} />
-        <Text style={styles.lockTitle}>Admins Only</Text>
-        <Text style={styles.lockSubtitle}>Only admin accounts can create and manage events.</Text>
+        <Text style={styles.lockTitle}>Teachers & Admins Only</Text>
+        <Text style={styles.lockSubtitle}>Only teacher or admin accounts can create and manage events.</Text>
       </View>
     );
   }
@@ -306,6 +389,27 @@ export default function TeacherScreen() {
           {selected.venue ? <Text style={styles.detailLine}>Venue: {selected.venue}</Text> : null}
           {selected.description ? <Text style={styles.detailLine}>{selected.description}</Text> : null}
 
+          <Text style={styles.sectionTitle}>
+            Attendance — {attendanceDetail ? `${attendanceDetail.attendeeCount} checked in` : 'loading…'}
+          </Text>
+          {attendanceDetail && attendanceDetail.attendees.length > 0 ? (
+            <View style={styles.attendeeList}>
+              {attendanceDetail.attendees.slice(0, 20).map((a) => (
+                <View key={`${a.studentId}-${a.scannedAt}`} style={styles.attendeeRow}>
+                  <Text style={styles.attendeeName} numberOfLines={1}>
+                    {a.studentName ?? a.studentEmail ?? a.studentId.slice(0, 8)}
+                  </Text>
+                  <Text style={styles.attendeeTime}>{new Date(a.scannedAt).toLocaleString()}</Text>
+                </View>
+              ))}
+              {attendanceDetail.attendees.length > 20 ? (
+                <Text style={styles.detailLine}>+{attendanceDetail.attendees.length - 20} more — see History tab</Text>
+              ) : null}
+            </View>
+          ) : (
+            <Text style={styles.detailLine}>No check-ins yet. Students scan the event QR to appear here.</Text>
+          )}
+
           <Text style={styles.sectionTitle}>Edit event</Text>
           <Field label="Event name" value={editTitle} onChangeText={setEditTitle} placeholder="Event name" />
           <Field label="Venue" value={editVenue} onChangeText={setEditVenue} placeholder="Venue" />
@@ -342,6 +446,9 @@ export default function TeacherScreen() {
               <Text style={styles.eventMeta}>
                 {item.start_time ? new Date(item.start_time).toLocaleDateString() : 'No date'}
                 {item.venue ? ` • ${item.venue}` : ''}
+              </Text>
+              <Text style={styles.eventCount}>
+                {summaries.find((s) => s.eventId === item.id)?.attendeeCount ?? 0} attended
               </Text>
             </Pressable>
           )}
@@ -425,4 +532,9 @@ const styles = StyleSheet.create({
   eventTitle: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '800', flex: 1 },
   eventCode: { color: COLORS.accent, fontSize: 13, fontWeight: '700' },
   eventMeta: { color: COLORS.textSecondary, fontSize: 12 },
+  eventCount: { color: COLORS.textPrimary, fontSize: 12, fontWeight: '800' },
+  attendeeList: { gap: 8, marginTop: 4 },
+  attendeeRow: { backgroundColor: COLORS.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: COLORS.border, gap: 2 },
+  attendeeName: { color: COLORS.textPrimary, fontSize: 14, fontWeight: '700' },
+  attendeeTime: { color: COLORS.textSecondary, fontSize: 12 },
 });

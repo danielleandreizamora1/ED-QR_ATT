@@ -40,7 +40,7 @@ type Props = {
 
 // Cross-platform stroke icons (works on iOS / Android / web).
 // 24x24 viewBox, round caps — matches StatusIcon line language.
-export function UiIcon({ name, size = 20, color = '#71717A', strokeWidth = 2, testID }: Props) {
+export function UiIcon({ name, size = 20, color = '#78716C', strokeWidth = 2, testID }: Props) {
   return (
     <View testID={testID} accessibilityRole="image" style={[styles.box, { width: size, height: size }]}>
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

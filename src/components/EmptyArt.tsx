@@ -32,7 +32,7 @@ function AllCheckedIn() {
       <Rect x="60" y="18" width="80" height="100" rx="12" fill={COLORS.card} stroke={COLORS.border} strokeWidth="2" />
       <Line x1="76" y1="48" x2="110" y2="48" stroke={COLORS.surface} strokeWidth="6" strokeLinecap="round" />
       <Line x1="76" y1="64" x2="124" y2="64" stroke={COLORS.surface} strokeWidth="6" strokeLinecap="round" />
-      <Circle cx="100" cy="96" r="18" fill="#18181B14" stroke={COLORS.success} strokeWidth="3" />
+      <Circle cx="100" cy="96" r="18" fill="#0C0A0914" stroke={COLORS.success} strokeWidth="3" />
       <Path d="M92 96l6 6 10-12" stroke={COLORS.success} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       <Circle cx="52" cy="34" r="4" fill={COLORS.accent} opacity="0.5" />
       <Circle cx="150" cy="52" r="5" fill={COLORS.warning} opacity="0.45" />
@@ -63,7 +63,7 @@ function CameraDisabled() {
       <Circle cx="100" cy="74" r="7" stroke={COLORS.textSecondary} strokeWidth="2.5" />
       <Rect x="86" y="32" width="28" height="10" rx="4" fill={COLORS.surface} stroke={COLORS.border} strokeWidth="2" />
       <Line x1="140" y1="46" x2="168" y2="96" stroke={COLORS.warning} strokeWidth="4" strokeLinecap="round" />
-      <Circle cx="154" cy="42" r="12" fill="#52525B14" stroke={COLORS.warning} strokeWidth="3" />
+      <Circle cx="154" cy="42" r="12" fill="#57534E14" stroke={COLORS.warning} strokeWidth="3" />
       <Line x1="154" y1="37" x2="154" y2="43" stroke={COLORS.warning} strokeWidth="2.5" strokeLinecap="round" />
       <Circle cx="154" cy="47" r="1.4" fill={COLORS.warning} />
     </>

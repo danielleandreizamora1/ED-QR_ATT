@@ -165,3 +165,5 @@ export function canCreateEvents(role: Role | null): boolean {
 export function canManageAll(role: Role | null): boolean {
   return role === 'admin';
 }
+
+export { can as hasCapability, ROLES } from '@/lib/roles';

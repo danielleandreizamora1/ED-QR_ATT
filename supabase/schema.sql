@@ -5,7 +5,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null,
   full_name text,
-  role text not null default 'student' check (role in ('student', 'teacher')),
+  role text not null default 'student' check (role in ('student', 'teacher', 'admin')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -44,7 +44,7 @@ declare
   meta_name text;
 begin
   meta_role := coalesce(nullif(new.raw_user_meta_data->>'role', ''), 'student');
-  if meta_role not in ('student', 'teacher') then
+  if meta_role not in ('student', 'teacher', 'admin') then
     meta_role := 'student';
   end if;
   meta_name := nullif(coalesce(new.raw_user_meta_data->>'full_name', ''), '');
@@ -54,7 +54,12 @@ begin
   on conflict (id) do update set
     email = excluded.email,
     full_name = coalesce(excluded.full_name, public.profiles.full_name),
-    role = case when excluded.role <> 'student' then excluded.role else public.profiles.role end,
+    -- never silently downgrade an admin/teacher to student
+    role = case
+      when public.profiles.role = 'admin' then 'admin'
+      when excluded.role <> 'student' then excluded.role
+      else public.profiles.role
+    end,
     updated_at = now();
   return new;
 end;
