@@ -30,7 +30,8 @@ function resolveIcon(icon?: LegacyIcon | UiIconName): UiIconName | null {
   return (LEGACY_MAP as Record<string, UiIconName>)[icon] ?? (icon as UiIconName);
 }
 
-// Modern button: taller, rounder, primary carries a soft emerald shadow.
+// Editorial Mono button V2: flat black primary pill, hairline secondary,
+// transparent ghost. No colored shadows — depth comes from ink, not glow.
 export default function AppButton({
   title,
   theme,
@@ -47,7 +48,7 @@ export default function AppButton({
   const name = resolveIcon(icon);
   const busy = loading || disabled;
   const iconColor =
-    resolved === 'primary' ? COLORS.textOnPrimary : resolved === 'danger' ? '#FFFFFF' : resolved === 'ghost' ? COLORS.primary : COLORS.textPrimary;
+    resolved === 'primary' ? COLORS.textOnPrimary : resolved === 'danger' ? COLORS.primary : resolved === 'ghost' ? COLORS.primary : COLORS.textPrimary;
 
   return (
     <Pressable
@@ -89,27 +90,27 @@ export default function AppButton({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 56,
-    borderRadius: RADIUS.md,
+    minHeight: 52,
+    borderRadius: RADIUS.pill,
     borderWidth: 1,
-    paddingHorizontal: 22,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
   },
-  small: { minHeight: 44, borderRadius: RADIUS.sm, paddingHorizontal: 14, paddingVertical: 10 },
+  small: { minHeight: 42, borderRadius: RADIUS.pill, paddingHorizontal: 14, paddingVertical: 9 },
   fullWidth: { alignSelf: 'stretch' },
-  primary: { backgroundColor: COLORS.primary, borderColor: COLORS.primary, ...SHADOW.pop },
+  primary: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   secondary: { backgroundColor: COLORS.card, borderColor: COLORS.border, ...SHADOW.card },
-  danger: { backgroundColor: COLORS.danger, borderColor: COLORS.danger },
-  ghost: { backgroundColor: COLORS.primarySoft, borderColor: `${COLORS.primary}26` },
-  label: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '800', letterSpacing: 0.1 },
-  labelSmall: { fontSize: 14 },
+  danger: { backgroundColor: COLORS.card, borderColor: COLORS.primary, borderWidth: 1.5 },
+  ghost: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  label: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  labelSmall: { fontSize: 13 },
   primaryLabel: { color: COLORS.textOnPrimary },
-  dangerLabel: { color: '#FFFFFF' },
+  dangerLabel: { color: COLORS.primary },
   ghostLabel: { color: COLORS.primary },
-  pressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
-  disabled: { opacity: 0.55 },
+  pressed: { opacity: 0.92, transform: [{ scale: 0.98 }] },
+  disabled: { opacity: 0.45 },
 });

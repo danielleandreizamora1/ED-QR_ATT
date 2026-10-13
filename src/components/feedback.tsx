@@ -7,13 +7,13 @@ import { EmptyArt, type EmptyArtKind } from '@/components/EmptyArt';
 import { StatusIcon } from '@/components/StatusIcon';
 import { UiIcon } from '@/components/UiIcon';
 
-// Shared feedback primitives — one look for loading / empty / error /
-// success across every screen (clean + consistent + easy to understand).
+// Editorial Mono feedback V2 — flat, hairline, high-contrast.
+// Badges: solid black = positive/open, outline = everything else.
 
 export function LoadingState({ message = 'Loading…' }: { message?: string }) {
   return (
     <View style={styles.center} accessibilityRole="progressbar">
-      <ActivityIndicator color={COLORS.accent} size="large" />
+      <ActivityIndicator color={COLORS.primary} size="large" />
       <Text style={styles.muted}>{message}</Text>
     </View>
   );
@@ -33,7 +33,9 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (
   return (
     <View style={styles.errorCard} accessibilityRole="alert">
       <View style={styles.noticeRow}>
-        <UiIcon name="alert" size={20} color={COLORS.danger} />
+        <View style={styles.errorMark}>
+          <UiIcon name="alert" size={16} color={COLORS.textOnPrimary} />
+        </View>
         <Text style={styles.errorTitle}>Something went wrong</Text>
       </View>
       <Text style={styles.errorText}>{message}</Text>
@@ -56,13 +58,18 @@ export function SuccessNotice({ title, detail }: { title: string; detail?: strin
   );
 }
 
+const SOLID_STATUSES: ReadonlySet<string> = new Set(['on-time', 'present', 'open']);
+
 export function StatusBadge({ status }: { status: AttendanceVisualStatus | 'open' | 'closed' }) {
   const meta = STATUS_META[status];
+  const solid = SOLID_STATUSES.has(status);
   return (
-    <View style={[styles.badge, { borderColor: meta.color, backgroundColor: `${meta.color}22` }]}>
+    <View style={[styles.badge, solid ? styles.badgeSolid : styles.badgeOutline]}>
       <View style={styles.badgeRow}>
-        <StatusIcon status={status} size={16} />
-        <Text style={[styles.badgeText, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
+        <StatusIcon status={status} size={14} />
+        <Text style={[styles.badgeText, solid ? styles.badgeTextSolid : styles.badgeTextOutline]}>
+          {meta.label.toUpperCase()}
+        </Text>
       </View>
     </View>
   );
@@ -73,17 +80,22 @@ const styles = StyleSheet.create({
   muted: { color: COLORS.textSecondary, fontSize: 14 },
   mutedCenter: { color: COLORS.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 21 },
   emptyTitle: { color: COLORS.textPrimary, fontSize: 19, fontWeight: '800', textAlign: 'center', letterSpacing: -0.2 },
-  errorCard: { backgroundColor: COLORS.dangerSoft, borderRadius: RADIUS.lg, padding: 18, borderWidth: 1, borderColor: `${COLORS.danger}30`, gap: 8, ...SHADOW.card },
-  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  errorTitle: { color: COLORS.danger, fontSize: 15, fontWeight: '800' },
-  errorText: { color: COLORS.textPrimary, fontSize: 14, lineHeight: 20 },
-  retryBtn: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: COLORS.primary, borderRadius: RADIUS.sm, paddingHorizontal: 16, minHeight: 46, justifyContent: 'center' },
-  retryText: { color: COLORS.textOnPrimary, fontWeight: '800' },
+  errorCard: { backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: 18, borderWidth: 1, borderColor: COLORS.border, borderLeftWidth: 3, borderLeftColor: COLORS.primary, gap: 8, ...SHADOW.card },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  errorMark: { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+  errorTitle: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '800' },
+  errorText: { color: COLORS.textSecondary, fontSize: 14, lineHeight: 20 },
+  retryBtn: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingHorizontal: 18, minHeight: 44, justifyContent: 'center' },
+  retryText: { color: COLORS.textOnPrimary, fontWeight: '700', fontSize: 13 },
   pressed: { opacity: 0.85 },
-  successCard: { backgroundColor: COLORS.successSoft, borderRadius: RADIUS.lg, padding: 20, borderWidth: 1, borderColor: `${COLORS.success}30`, alignItems: 'center', gap: 8, ...SHADOW.card },
-  successTitle: { color: COLORS.success, fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  successCard: { backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: 20, borderWidth: 1, borderColor: COLORS.border, borderLeftWidth: 3, borderLeftColor: COLORS.primary, alignItems: 'center', gap: 8, ...SHADOW.card },
+  successTitle: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '800', textAlign: 'center' },
   successDetail: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center' },
-  badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1 },
+  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1 },
+  badgeSolid: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  badgeOutline: { backgroundColor: 'transparent', borderColor: COLORS.borderStrong },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  badgeText: { fontSize: 10, fontWeight: '800' },
+  badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
+  badgeTextSolid: { color: COLORS.textOnPrimary },
+  badgeTextOutline: { color: COLORS.textPrimary },
 });

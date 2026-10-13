@@ -1,0 +1,45 @@
+/* QR-att — Black & Grey theme. Paste into your global CSS (web) or
+   use as the values for a Tailwind v4 @theme block. */
+
+:root {
+  /* Surfaces */
+  --qratt-black: #000000;
+  --qratt-bg: #0a0a0a;
+  --qratt-surface-1: #121212;
+  --qratt-surface-2: #18181b;
+  --qratt-surface-3: #27272a;
+
+  /* Lines */
+  --qratt-border: #3f3f46;
+  --qratt-border-subtle: rgb(63 63 70 / 0.55);
+  --qratt-border-faint: rgb(63 63 70 / 0.32);
+
+  /* Type */
+  --qratt-text: #f4f4f5;
+  --qratt-muted: #a1a1aa;
+  --qratt-silver: #d4d4d8;
+
+  /* Status (monochrome-first, muted color only for ok/alert) */
+  --qratt-ok: #86efac;
+  --qratt-ok-dim: rgb(134 239 172 / 0.12);
+  --qratt-alert: #fca5a5;
+  --qratt-alert-dim: rgb(252 165 165 / 0.12);
+
+  --qratt-radius-sm: 10px;
+  --qratt-radius-md: 14px;
+  --qratt-radius-lg: 20px;
+  --qratt-radius-pill: 999px;
+}
+
+/* Tailwind v4 equivalent:
+@theme {
+  --color-pitch: #0A0A0A;
+  --color-ink: #000000;
+  --color-surface-1: #121212;
+  --color-surface-2: #18181B;
+  --color-surface-3: #27272A;
+  --color-line: #3F3F46;
+  --color-fog: #F4F4F5;
+  --color-ash: #A1A1AA;
+  --color-silver: #D4D4D8;
+} */

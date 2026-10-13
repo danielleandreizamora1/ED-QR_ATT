@@ -11,7 +11,7 @@ import { UiIcon } from '@/components/UiIcon';
 import { getAllEvents, type CloudEvent } from '@/lib/events';
 import { useAuth, useRole } from '@/lib/auth';
 
-// Student capability: view available events. Teacher/Admin see management hints.
+// Editorial Mono V2: black check-in ledger card + numbered event rows.
 export default function EventsScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -52,7 +52,7 @@ export default function EventsScreen() {
   if (error) {
     return (
       <View style={styles.container}>
-        <ScreenHeader eyebrow="SCHOOL EVENTS" title="Available events" />
+        <ScreenHeader index="01" eyebrow="SCHOOL EVENTS" title="Available events" />
         <ErrorNotice message={error} onRetry={() => void load()} />
       </View>
     );
@@ -63,6 +63,7 @@ export default function EventsScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader
+        index="01"
         eyebrow="SCHOOL EVENTS"
         title="Available events"
         subtitle={
@@ -72,34 +73,45 @@ export default function EventsScreen() {
         }
       />
 
-      {/* Modern hero: one-tap check-in + live open count. */}
+      {/* Ledger hero: live count + scan action in solid black */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Scan QR to check in now"
         onPress={() => router.push('/(tabs)/scan')}
         style={({ pressed }) => [styles.hero, pressed && styles.pressed]}
       >
-        <View style={styles.heroTile}>
-          <UiIcon name="scan" size={26} color={COLORS.textOnPrimary} />
+        <View style={styles.heroTop}>
+          <View style={styles.liveRow}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>
+              {openCount > 0 ? `${String(openCount).padStart(2, '0')} OPEN NOW` : 'NO OPEN EVENTS'}
+            </Text>
+          </View>
+          <Text style={styles.heroIndex}>QR—01</Text>
         </View>
-        <View style={styles.heroText}>
-          <Text style={styles.heroTitle}>Ready to check in?</Text>
-          <Text style={styles.heroSub}>
-            {openCount > 0 ? `${openCount} event${openCount === 1 ? '' : 's'} open now` : 'Point at the event QR'}
-          </Text>
-        </View>
-        <View style={styles.heroCta}>
-          <Text style={styles.heroCtaText}>Scan</Text>
-          <UiIcon name="chevron-right" size={16} color={COLORS.textOnPrimary} />
+        <Text style={styles.heroTitle}>Ready to check in?</Text>
+        <Text style={styles.heroSub}>
+          {openCount > 0 ? 'Point at the event QR to record attendance.' : 'Ask a teacher for the event QR.'}
+        </Text>
+        <View style={styles.heroAction}>
+          <Text style={styles.heroActionText}>Scan QR</Text>
+          <View style={styles.heroArrow}>
+            <UiIcon name="chevron-right" size={16} color={COLORS.primary} />
+          </View>
         </View>
       </Pressable>
+
+      <View style={styles.listHead}>
+        <Text style={styles.listHeadText}>ALL EVENTS — {String(events.length).padStart(2, '0')}</Text>
+        <View style={styles.listRule} />
+      </View>
 
       <FlatList
         data={events}
         keyExtractor={(item) => item.id}
         contentContainerStyle={events.length === 0 ? styles.emptyList : styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${item.title}, ${item.status}`}
@@ -107,33 +119,26 @@ export default function EventsScreen() {
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
           >
             <View style={styles.cardTop}>
-              <IconTile name="calendar" tone={item.status === 'open' ? 'primary' : 'neutral'} size={44} />
+              <Text style={styles.cardIndex}>{String(index + 1).padStart(2, '0')}</Text>
               <View style={styles.titleBlock}>
                 <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
                 <Text style={styles.cardCode}>{item.event_code}</Text>
               </View>
               <StatusBadge status={item.status} />
             </View>
-            <View style={styles.chipRow}>
-              <View style={styles.metaChip}>
-                <UiIcon name="clock" size={13} color={COLORS.textSecondary} />
-                <Text style={styles.metaText} numberOfLines={1}>
-                  {item.start_time ? new Date(item.start_time).toLocaleString() : 'No start set'}
-                </Text>
-              </View>
-              {item.venue ? (
-                <View style={styles.metaChip}>
-                  <UiIcon name="pin" size={13} color={COLORS.textSecondary} />
-                  <Text style={styles.metaText} numberOfLines={1}>{item.venue}</Text>
-                </View>
-              ) : null}
+            <View style={styles.metaRow}>
+              <IconTile name="calendar" tone={item.status === 'open' ? 'primary' : 'neutral'} size={36} iconSize={16} />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {item.start_time ? new Date(item.start_time).toLocaleString() : 'No start set'}
+                {item.venue ? `  ·  ${item.venue}` : ''}
+              </Text>
             </View>
             {item.description ? <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text> : null}
             <View style={styles.ctaRow}>
               <Text style={[styles.cardCta, item.status !== 'open' && styles.cardCtaMuted]}>
                 {item.status === 'open' ? 'Scan QR to check in' : 'Closed — check-in disabled'}
               </Text>
-              {item.status === 'open' ? <UiIcon name="chevron-right" size={16} color={COLORS.primary} /> : null}
+              {item.status === 'open' ? <UiIcon name="chevron-right" size={15} color={COLORS.primary} /> : null}
             </View>
           </Pressable>
         )}
@@ -151,72 +156,47 @@ export default function EventsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, padding: 20, paddingTop: 24 },
-  list: { gap: 14, paddingBottom: 28 },
+  list: { gap: 12, paddingBottom: 28 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   hero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
     backgroundColor: COLORS.primaryDeep,
     borderRadius: RADIUS.xl,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FFFFFF22',
+    padding: 20,
+    marginBottom: 20,
+    gap: 8,
     ...SHADOW.pop,
   },
-  heroTile: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF22',
-    borderWidth: 1,
-    borderColor: '#FFFFFF33',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroText: { flex: 1, gap: 2 },
-  heroTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
-  heroSub: { color: '#D1FAE5', fontSize: 13, fontWeight: '600' },
-  heroCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#FFFFFF22',
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#FFFFFF33',
-  },
-  heroCtaText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
+  liveText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800', letterSpacing: 1.2, fontFamily: 'monospace' },
+  heroIndex: { color: '#FFFFFF66', fontSize: 11, fontWeight: '700', fontFamily: 'monospace', letterSpacing: 1 },
+  heroTitle: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
+  heroSub: { color: '#D6D3D1', fontSize: 13, fontWeight: '500', lineHeight: 19 },
+  heroAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: RADIUS.pill, paddingLeft: 18, paddingRight: 6, paddingVertical: 6 },
+  heroActionText: { color: COLORS.primary, fontSize: 14, fontWeight: '800' },
+  heroArrow: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
+  listHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  listHeadText: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, fontFamily: 'monospace' },
+  listRule: { flex: 1, height: 1, backgroundColor: COLORS.border },
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: RADIUS.xl,
-    padding: 18,
+    borderRadius: RADIUS.lg,
+    padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    gap: 12,
+    gap: 10,
     ...SHADOW.card,
   },
-  pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  titleBlock: { flex: 1, gap: 2 },
-  cardTitle: { color: COLORS.textPrimary, fontSize: 17, fontWeight: '800', lineHeight: 22, letterSpacing: -0.2 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    maxWidth: '100%',
-  },
-  metaText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  pressed: { opacity: 0.94, transform: [{ scale: 0.99 }] },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  cardIndex: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', fontFamily: 'monospace', paddingTop: 3 },
+  titleBlock: { flex: 1, gap: 4 },
+  cardTitle: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '800', lineHeight: 21, letterSpacing: -0.2 },
+  cardCode: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, fontFamily: 'monospace', backgroundColor: COLORS.surface, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  metaText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600', flexShrink: 1, flex: 1 },
   cardDesc: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 19 },
-  cardCode: { color: COLORS.primary, fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
   ctaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -227,6 +207,6 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     minHeight: 24,
   },
-  cardCta: { color: COLORS.primary, fontSize: 14, fontWeight: '800' },
-  cardCtaMuted: { color: COLORS.textSecondary },
+  cardCta: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '800' },
+  cardCtaMuted: { color: COLORS.textSecondary, fontWeight: '600' },
 });

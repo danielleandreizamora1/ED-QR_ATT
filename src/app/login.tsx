@@ -7,7 +7,7 @@ import AppButton from '@/components/AppButton';
 import { ErrorNotice } from '@/components/feedback';
 import { UiIcon } from '@/components/UiIcon';
 import { COLORS } from '@/constants/colors';
-import { RADIUS, SHADOW } from '@/constants/ui';
+import { RADIUS } from '@/constants/ui';
 import { signIn } from '@/lib/auth';
 import { validateEmail } from '@/lib/validation';
 
@@ -44,27 +44,36 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Modern brand hero */}
+      {/* Editorial masthead: black mark + wordmark rule */}
       <View style={styles.hero}>
-        <View style={styles.brandTile}>
-          <UiIcon name="qr" size={30} color={COLORS.textOnPrimary} />
+        <View style={styles.masthead}>
+          <View style={styles.mark}>
+            <UiIcon name="qr" size={22} color={COLORS.textOnPrimary} />
+          </View>
+          <Text style={styles.wordmark}>QR—ATT</Text>
+          <View style={styles.mastRule} />
+          <Text style={styles.edition}>01</Text>
         </View>
-        <Text style={styles.eyebrow}>QR ATTENDANCE</Text>
-        <Text style={styles.heroTitle}>Welcome back</Text>
-        <Text style={styles.heroSub}>Sign in to record your attendance in seconds.</Text>
+        <Text style={styles.eyebrow}>QR ATTENDANCE — SIGN IN</Text>
+        <Text style={styles.heroTitle}>Welcome{'\n'}back.</Text>
+        <Text style={styles.heroSub}>Record attendance in seconds. Just sign in and scan.</Text>
       </View>
 
       <KeyboardAvoidingView style={styles.sheetWrap} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.sheet} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Email</Text>
-          <View style={styles.inputWrap}>
-            <UiIcon name="mail" size={18} color={COLORS.textSecondary} />
-            <TextInput value={email} onChangeText={setEmail} placeholder="you@school.edu" placeholderTextColor={COLORS.textSecondary} style={styles.inputInner} autoCapitalize="none" keyboardType="email-address" editable={!loading} />
+          <View style={styles.field}>
+            <Text style={styles.label}>EMAIL</Text>
+            <View style={styles.inputWrap}>
+              <UiIcon name="mail" size={17} color={COLORS.textSecondary} />
+              <TextInput value={email} onChangeText={setEmail} placeholder="you@school.edu" placeholderTextColor={COLORS.textSecondary} style={styles.inputInner} autoCapitalize="none" keyboardType="email-address" editable={!loading} />
+            </View>
           </View>
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.inputWrap}>
-            <UiIcon name="lock" size={18} color={COLORS.textSecondary} />
-            <TextInput value={password} onChangeText={setPassword} placeholder="Your password" placeholderTextColor={COLORS.textSecondary} style={styles.inputInner} secureTextEntry editable={!loading} />
+          <View style={styles.field}>
+            <Text style={styles.label}>PASSWORD</Text>
+            <View style={styles.inputWrap}>
+              <UiIcon name="lock" size={17} color={COLORS.textSecondary} />
+              <TextInput value={password} onChangeText={setPassword} placeholder="Your password" placeholderTextColor={COLORS.textSecondary} style={styles.inputInner} secureTextEntry editable={!loading} />
+            </View>
           </View>
 
           {error && (
@@ -76,13 +85,13 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color={COLORS.primary} size="large" />
             ) : (
-              <AppButton theme="primary" title="Sign in" icon="login" onPress={handleLogin} fullWidth />
+              <AppButton theme="primary" title="Sign in  →" onPress={handleLogin} fullWidth />
             )}
           </View>
 
           <Link href={'/register' as RelativePathString} asChild>
             <Pressable style={styles.linkBtn}>
-              <Text style={styles.link}>Don&apos;t have an account? <Text style={styles.linkStrong}>Sign up</Text></Text>
+              <Text style={styles.link}>New here? <Text style={styles.linkStrong}>Create account</Text></Text>
             </Pressable>
           </Link>
         </ScrollView>
@@ -92,50 +101,47 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.primaryDeep },
-  hero: { paddingHorizontal: 24, paddingTop: 72, paddingBottom: 28, gap: 6 },
-  brandTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF1F',
-    borderWidth: 1,
-    borderColor: '#FFFFFF33',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  eyebrow: { color: '#A7F3D0', fontSize: 12, fontWeight: '800', letterSpacing: 1.6 },
-  heroTitle: { color: '#FFFFFF', fontSize: 34, fontWeight: '800', letterSpacing: -0.5 },
-  heroSub: { color: '#D1FAE5', fontSize: 15, lineHeight: 22 },
+  root: { flex: 1, backgroundColor: COLORS.background },
+  hero: { paddingHorizontal: 24, paddingTop: 76, paddingBottom: 20, gap: 10 },
+  masthead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  mark: { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+  wordmark: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '800', letterSpacing: 2 },
+  mastRule: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  edition: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', fontFamily: 'monospace' },
+  eyebrow: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', letterSpacing: 1.4 },
+  heroTitle: { color: COLORS.textPrimary, fontSize: 44, fontWeight: '800', letterSpacing: -1.2, lineHeight: 46 },
+  heroSub: { color: COLORS.textSecondary, fontSize: 15, lineHeight: 22, maxWidth: 280 },
   sheetWrap: { flex: 1 },
   sheet: {
     flexGrow: 1,
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: COLORS.border,
     padding: 24,
-    paddingTop: 26,
-    gap: 2,
-    ...SHADOW.sheet,
+    paddingTop: 24,
+    gap: 16,
   },
-  label: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '800', marginBottom: 7, marginTop: 14 },
+  field: { gap: 8 },
+  label: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     minHeight: 56,
     borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
     backgroundColor: COLORS.card,
     paddingHorizontal: 14,
-    ...SHADOW.card,
   },
   inputInner: { flex: 1, color: COLORS.textPrimary, fontSize: 16, paddingVertical: 12 },
-  errorWrap: { marginTop: 16 },
-  btnWrap: { marginTop: 22 },
-  linkBtn: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  errorWrap: { marginTop: 4 },
+  btnWrap: { marginTop: 8 },
+  linkBtn: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   link: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 14 },
-  linkStrong: { color: COLORS.primary, fontWeight: '800' },
+  linkStrong: { color: COLORS.textPrimary, fontWeight: '800', textDecorationLine: 'underline' },
 });

@@ -59,19 +59,19 @@ export const STATUS_META: Record<AttendanceVisualStatus, { color: string; label:
 } as const;
 
 // Tab bar: explicit active/inactive specs (no runtime tinting).
-// Active = filled/duotone on Primary-600. Inactive = outline Neutral-400.
+// Active = solid black glyph + label. Inactive = warm stone outline.
 export const TAB_ICON = {
   size: ICON_RENDER_SIZES.lg,
   strokeWidth: ICON_STROKE.lg,
   active: {
     glyph: COLORS.primary,
-    wash: '#04785714',
+    wash: '#0C0A0914',
     label: COLORS.primary,
     weight: '700' as const,
   },
   inactive: {
-    glyph: '#9CA3AF',
-    label: '#6B7280',
+    glyph: '#A8A29E',
+    label: '#78716C',
     weight: '500' as const,
   },
 } as const;

@@ -1,29 +1,36 @@
 import { StyleSheet, View } from 'react-native';
 
 import { COLORS } from '@/constants/colors';
-import { RADIUS } from '@/constants/ui';
 import { UiIcon, type UiIconName } from '@/components/UiIcon';
 
 type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
 const TONE_BG: Record<Tone, string> = {
-  primary: COLORS.primarySoft,
-  success: COLORS.successSoft,
-  warning: COLORS.warningSoft,
-  danger: COLORS.dangerSoft,
+  primary: COLORS.primary,
+  success: COLORS.primary,
+  warning: COLORS.card,
+  danger: COLORS.card,
   neutral: COLORS.surface,
 };
 
 const TONE_FG: Record<Tone, string> = {
-  primary: COLORS.primary,
-  success: COLORS.success,
-  warning: COLORS.warning,
-  danger: COLORS.danger,
+  primary: COLORS.textOnPrimary,
+  success: COLORS.textOnPrimary,
+  warning: COLORS.textPrimary,
+  danger: COLORS.textPrimary,
   neutral: COLORS.textSecondary,
 };
 
-// Modern icon tile — rounded tinted square behind every list / form icon.
-// Replaces bare icons floating on white.
+const TONE_BORDER: Record<Tone, string> = {
+  primary: COLORS.primary,
+  success: COLORS.primary,
+  warning: COLORS.borderStrong,
+  danger: COLORS.borderStrong,
+  neutral: COLORS.border,
+};
+
+// Editorial Mono tile V2 — solid black for primary actions, hairline
+// outline for everything else. Square-ish (12px) instead of bubbly.
 export function IconTile({
   name,
   tone = 'neutral',
@@ -36,12 +43,23 @@ export function IconTile({
   iconSize?: number;
 }) {
   return (
-    <View style={[styles.tile, { width: size, height: size, borderRadius: size * 0.32, backgroundColor: TONE_BG[tone] }]}>
+    <View
+      style={[
+        styles.tile,
+        {
+          width: size,
+          height: size,
+          borderRadius: 12,
+          backgroundColor: TONE_BG[tone],
+          borderColor: TONE_BORDER[tone],
+        },
+      ]}
+    >
       <UiIcon name={name} size={iconSize} color={TONE_FG[tone]} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tile: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#0F172A0D' },
+  tile: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 });

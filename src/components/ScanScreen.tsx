@@ -116,7 +116,7 @@ export default function ScanScreen() {
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
       />
-      {/* Scanner focal point: emerald corner frame guides QR placement. */}
+      {/* Scanner focal point: black corner frame guides QR placement. */}
       {!scanned ? (
         <View style={styles.frame} pointerEvents="none">
           <View style={[styles.corner, styles.cornerTL]} />
@@ -127,9 +127,10 @@ export default function ScanScreen() {
       ) : null}
       <Toast toast={toast} />
       <View style={styles.overlay}>
+        <View style={styles.handle} />
         <View style={styles.overlayHeader}>
-          <UiIcon name="scan" size={20} color={COLORS.primary} />
-          <Text style={styles.overlayText}>{scanned ? 'Scan detected' : 'Scan event QR code'}</Text>
+          <UiIcon name="scan" size={15} color={COLORS.textSecondary} />
+          <Text style={styles.overlayText}>{scanned ? 'SCAN DETECTED' : 'SCAN EVENT QR CODE'}</Text>
         </View>
         {!scanned ? (
           <Text style={styles.helperText}>Point the camera at the event QR shown by your teacher.</Text>
@@ -160,26 +161,27 @@ export default function ScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
+  container: { flex: 1, backgroundColor: '#000000' },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, marginBottom: 2 },
   permissionContainer: { flex: 1, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 8 },
   camera: StyleSheet.absoluteFill,
-  frame: { position: 'absolute', top: '22%', left: '15%', right: '15%', aspectRatio: 1 },
-  corner: { position: 'absolute', width: 36, height: 36, borderColor: COLORS.accent, borderRadius: 6 },
-  cornerTL: { top: 0, left: 0, borderTopWidth: 5, borderLeftWidth: 5 },
-  cornerTR: { top: 0, right: 0, borderTopWidth: 5, borderRightWidth: 5 },
-  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 5, borderLeftWidth: 5 },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 5, borderRightWidth: 5 },
-  overlay: { position: 'absolute', left: 16, right: 16, bottom: 28, backgroundColor: COLORS.card, borderRadius: RADIUS.xl, borderWidth: 1, borderColor: COLORS.border, padding: 20, alignItems: 'center', gap: 12, ...SHADOW.sheet },
-  overlayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.primarySoft, borderRadius: RADIUS.pill, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: `${COLORS.primary}26` },
+  frame: { position: 'absolute', top: '20%', left: '14%', right: '14%', aspectRatio: 1 },
+  corner: { position: 'absolute', width: 30, height: 30, borderColor: '#FFFFFF', borderRadius: 4 },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
+  overlay: { position: 'absolute', left: 16, right: 16, bottom: 24, backgroundColor: COLORS.card, borderRadius: RADIUS.xl, borderWidth: 1, borderColor: COLORS.border, padding: 20, paddingTop: 12, alignItems: 'center', gap: 12, ...SHADOW.sheet },
+  overlayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 20, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 8, textAlign: 'center' },
   subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  overlayText: { fontSize: 15, fontWeight: '800', color: COLORS.primary, textAlign: 'center' },
-  helperText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 4, lineHeight: 19 },
+  overlayText: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary, textAlign: 'center', letterSpacing: 1.2 },
+  helperText: { fontSize: 15, color: COLORS.textPrimary, textAlign: 'center', marginBottom: 4, lineHeight: 21, fontWeight: '700' },
   confirmCard: { alignItems: 'center', gap: 8, paddingVertical: 8 },
-  confirmTitle: { fontSize: 17, textAlign: 'center', fontWeight: '800', color: COLORS.success, letterSpacing: -0.2 },
-  confirmTitleError: { fontSize: 14, textAlign: 'center', fontWeight: '700', color: COLORS.danger },
+  confirmTitle: { fontSize: 17, textAlign: 'center', fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
+  confirmTitleError: { fontSize: 14, textAlign: 'center', fontWeight: '700', color: COLORS.textPrimary },
   confirmEvent: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  confirmCode: { fontSize: 13, fontWeight: '700', color: COLORS.accent, textAlign: 'center' },
+  confirmCode: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary, textAlign: 'center', fontFamily: 'monospace', letterSpacing: 0.8 },
   confirmTime: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center' },
   scanData: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', maxWidth: 280 },
 });

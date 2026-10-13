@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QR-att — Black &amp; Grey Dashboard</title>
+<style>
+  :root{
+    --bg:#0A0A0A; --black:#000; --s1:#121212; --s2:#18181B; --s3:#27272A;
+    --line:#3F3F46; --line-soft:rgb(63 63 70/.55); --line-faint:rgb(63 63 70/.32);
+    --text:#F4F4F5; --muted:#A1A1AA; --silver:#D4D4D8;
+    --ok:#86EFAC; --ok-dim:rgb(134 239 172/.12); --alert:#FCA5A5; --alert-dim:rgb(252 165 165/.12);
+    --r:20px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px clamp(14px,3vw,28px) 56px}
+  /* Top bar */
+  header.top{position:sticky;top:0;z-index:20;background:rgb(10 10 10/.86);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line-faint)}
+  .top-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:12px;
+    padding:14px clamp(14px,3vw,28px)}
+  .logo{font-size:22px;font-weight:900;letter-spacing:-.5px;white-space:nowrap}
+  .logo span{color:var(--muted);font-weight:600}
+  .search{flex:1;display:flex;align-items:center;gap:8px;background:var(--s1);
+    border:1px solid var(--line-soft);border-radius:12px;padding:0 12px;height:42px;min-width:120px}
+  .search input{flex:1;background:none;border:0;outline:0;color:var(--text);font-size:14px}
+  .search input::placeholder{color:var(--muted)}
+  .iconbtn{position:relative;width:42px;height:42px;flex:none;display:grid;place-items:center;
+    background:var(--s1);border:1px solid var(--line-soft);border-radius:12px;color:var(--text);cursor:pointer}
+  .iconbtn .dot{position:absolute;top:9px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--text)}
+  .avatar{width:42px;height:42px;flex:none;display:flex;align-items:center;gap:6px;justify-content:center;
+    background:var(--s3);border:1px solid var(--line-soft);border-radius:12px;font-weight:800;font-size:13px;cursor:pointer}
+  .avatar small{color:var(--muted);font-weight:600}
+  /* Layout */
+  .grid{display:grid;gap:14px;margin-top:18px}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .card{background:var(--s1);border:1px solid var(--line-soft);border-radius:var(--r);
+    padding:18px;box-shadow:0 8px 24px rgb(0 0 0/.45)}
+  .label{color:var(--muted);font-size:12px;font-weight:600}
+  .value{font-size:30px;font-weight:900;letter-spacing:-.5px;margin:2px 0}
+  .delta{color:var(--silver);font-size:12px;font-weight:600}
+  .main{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+  h2{font-size:16px;margin:0} .sub{color:var(--muted);font-size:12px;font-weight:600;margin:2px 0 12px}
+  /* Chart */
+  .bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding-top:6px}
+  .bar{flex:1;background:var(--s2);border-radius:8px;display:flex;align-items:flex-end;overflow:hidden;min-height:100%}
+  .bar i{display:block;width:100%;border-radius:8px;background:linear-gradient(180deg,#E4E4E7,#52525B)}
+  .x{display:flex;gap:10px;margin-top:8px}.x span{flex:1;text-align:center;color:var(--muted);font-size:11px;font-weight:700}
+  /* Scanner */
+  .finder{position:relative;height:300px;border-radius:14px;background:
+    radial-gradient(120px 120px at 50% 45%,rgb(255 255 255/.06),transparent 70%),var(--black);
+    border:1px solid var(--line-soft);overflow:hidden}
+  .corner{position:absolute;width:46px;height:46px;border:0 solid var(--text)}
+  .tl{top:26px;left:26px;border-top-width:3px;border-left-width:3px;border-top-left-radius:10px}
+  .tr{top:26px;right:26px;border-top-width:3px;border-right-width:3px;border-top-right-radius:10px}
+  .bl{bottom:26px;left:26px;border-bottom-width:3px;border-left-width:3px;border-bottom-left-radius:10px}
+  .br{bottom:26px;right:26px;border-bottom-width:3px;border-right-width:3px;border-bottom-right-radius:10px}
+  .scanline{position:absolute;left:19%;right:19%;top:30%;height:2px;border-radius:2px;background:var(--text);
+    box-shadow:0 0 18px rgb(244 244 245/.7);animation:scan 2.6s ease-in-out infinite}
+  @keyframes scan{0%,100%{top:28%}50%{top:66%}}
+  .pill{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;
+    background:rgb(24 24 27/.92);border:1px solid var(--line-soft);border-radius:999px;padding:8px 14px;
+    font-size:12px;font-weight:700;white-space:nowrap}
+  .pulse{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgb(134 239 172/.6);animation:p 1.8s infinite}
+  @keyframes p{70%{box-shadow:0 0 0 9px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  .scanbtns{display:flex;gap:10px;margin-top:12px}
+  .btn{flex:1;height:42px;border-radius:12px;border:1px solid var(--line-soft);cursor:pointer;font-weight:800}
+  .btn.primary{background:var(--text);color:#0A0A0A;border-color:var(--text)}
+  .btn.ghost{background:var(--s3);color:var(--text)}
+  /* Table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    padding:10px 12px;border-bottom:1px solid var(--line-faint)}
+  tbody td{padding:11px 12px;border-bottom:1px solid var(--line-faint)}
+  tbody tr:nth-child(even) td{background:rgb(39 39 42/.55)}
+  tbody tr:nth-child(even) td:first-child{border-radius:10px 0 0 10px}
+  tbody tr:nth-child(even) td:last-child{border-radius:0 10px 10px 0}
+  .name{font-weight:700}.id{color:var(--muted);font-size:12px}
+  .mono{font-variant-numeric:tabular-nums;color:var(--silver);font-weight:700}
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid;border-radius:999px;
+    padding:5px 10px;font-size:11px;font-weight:800;white-space:nowrap}
+  .badge i{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .b-ok{background:var(--text);color:#0A0A0A;border-color:var(--text)}
+  .b-late{background:rgb(63 63 70/.65);color:var(--text);border-color:var(--line)}
+  .b-abs{background:var(--alert-dim);color:var(--alert);border-color:rgb(252 165 165/.35)}
+  .tablewrap{overflow-x:auto}
+  @media(max-width:940px){.metrics{grid-template-columns:1fr 1fr}.main{grid-template-columns:1fr}}
+  @media(max-width:560px){
+    .metrics{grid-template-columns:1fr 1fr}.value{font-size:24px}
+    .search{height:40px}.avatar small{display:none}
+    thead th:nth-child(3),tbody td:nth-child(3){display:none}
+  }
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="logo">QR<span>-att</span></div>
+  <label class="search"><span style="color:var(--muted)">⌕</span><input placeholder="Search name, ID, event…" /></label>
+  <button class="iconbtn" aria-label="Notifications">◉<span class="dot"></span></button>
+  <button class="avatar" aria-label="Switch profile">AR <small>▾</small></button>
+</div></header>
+
+<div class="wrap">
+  <section class="metrics">
+    <div class="card"><div class="label">Total Attendance</div><div class="value">1,284</div><div class="delta">+4.2% this week</div></div>
+    <div class="card"><div class="label">Scanned Today</div><div class="value">186</div><div class="delta">+12 since 8:00 AM</div></div>
+    <div class="card"><div class="label">On-Time</div><div class="value">164</div><div class="delta">88% of today</div></div>
+    <div class="card"><div class="label">Late</div><div class="value">22</div><div class="delta">12% flagged</div></div>
+  </section>
+
+  <section class="grid main">
+    <div class="card">
+      <h2>Attendance trend</h2><div class="sub">Last 7 sessions · dark-grey scale</div>
+      <div class="bars">
+        <div class="bar"><i style="height:42%"></i></div><div class="bar"><i style="height:68%"></i></div>
+        <div class="bar"><i style="height:55%"></i></div><div class="bar"><i style="height:80%"></i></div>
+        <div class="bar"><i style="height:62%"></i></div><div class="bar"><i style="height:92%"></i></div>
+        <div class="bar"><i style="height:74%"></i></div>
+      </div>
+      <div class="x"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+    </div>
+    <div class="card">
+      <h2>Live scanner</h2><div class="sub">Camera viewfinder inside a dark frame</div>
+      <div class="finder">
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scanline"></div>
+        <div class="pill"><span class="pulse"></span>Scanning… align QR within frame</div>
+      </div>
+      <div class="scanbtns"><button class="btn primary">Scan now</button><button class="btn ghost">Enter ID manually</button></div>
+    </div>
+  </section>
+
+  <section class="grid"><div class="card">
+    <h2>Recent scans</h2><div class="sub">Status · Name · ID · Timestamp</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Status</th><th>Name</th><th>ID</th><th>Timestamp</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge b-ok"><i></i>On-Time</span></td><td class="name">Amara Osei</td><td class="id">STU-0412</td><td class="mono">09:02:14</td></tr>
+        <tr><td><span class="badge b-ok"><i></i>On-Time</span></td><td class="name">Daniel Reyes</td><td class="id">STU-0890</td><td class="mono">09:03:47</td></tr>
+        <tr><td><span class="badge b-late"><i></i>Late</span></td><td class="name">Priya Nair</td><td class="id">STU-0233</td><td class="mono">09:11:02</td></tr>
+        <tr><td><span class="badge b-late"><i></i>Late</span></td><td class="name">Jonas Weber</td><td class="id">STU-0771</td><td class="mono">09:12:30</td></tr>
+        <tr><td><span class="badge b-abs"><i></i>Absent</span></td><td class="name">Lena Cruz</td><td class="id">STU-0154</td><td class="mono">—</td></tr>
+      </tbody>
+    </table></div>
+  </div></section>
+</div>
+</body>
+</html>

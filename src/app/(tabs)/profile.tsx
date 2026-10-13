@@ -56,30 +56,34 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader eyebrow="ACCOUNT" title="My profile" subtitle="Your identity across every check-in." />
-      {/* Modern identity hero */}
+      <ScreenHeader index="05" eyebrow="ACCOUNT" title="My profile" subtitle="Your identity across every check-in." />
+      {/* Ledger identity card */}
       <View style={styles.heroCard}>
-        <View style={styles.avatarRing}>
+        <View style={styles.heroTop}>
+          <Text style={styles.heroIndex}>ID — {(profile?.role ?? 'student').toUpperCase()}</Text>
+          <View style={styles.roleDot} />
+        </View>
+        <View style={styles.heroMain}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
-        </View>
-        <View style={styles.identityText}>
-          <Text style={styles.identityName} numberOfLines={1}>
-            {profile?.full_name || 'Add your name'}
-          </Text>
-          <Text style={styles.identityEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
-          <View style={styles.roleBadge}>
-            <UiIcon name={profile?.role === 'teacher' ? 'school' : profile?.role === 'admin' ? 'shield' : 'user'} size={13} color={COLORS.primary} />
-            <Text style={styles.roleBadgeText}>{profile?.role ?? 'student'}</Text>
+          <View style={styles.identityText}>
+            <Text style={styles.identityName} numberOfLines={1}>
+              {profile?.full_name || 'Add your name'}
+            </Text>
+            <Text style={styles.identityEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
           </View>
+        </View>
+        <View style={styles.heroFoot}>
+          <UiIcon name={profile?.role === 'teacher' ? 'school' : profile?.role === 'admin' ? 'shield' : 'user'} size={13} color="#FFFFFF" />
+          <Text style={styles.roleBadgeText}>{profile?.role ?? 'student'}</Text>
         </View>
       </View>
       <View style={styles.card}>
-
         <View style={styles.row}>
-          <UiIcon name="user" size={17} color={COLORS.textSecondary} />
-          <Text style={styles.label}>Name</Text>
+          <Text style={styles.rowIndex}>01</Text>
+          <UiIcon name="user" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.label}>NAME</Text>
         </View>
         {editing ? (
           <View style={styles.nameEditRow}>
@@ -92,26 +96,29 @@ export default function ProfileScreen() {
           <Pressable onPress={() => setEditing(true)} style={styles.nameRow} accessibilityRole="button">
             <Text style={styles.value}>{profile?.full_name || 'Tap to add your name'}</Text>
             <View style={styles.editPill}>
-              <UiIcon name="edit" size={13} color={COLORS.primary} />
-              <Text style={styles.editHint}>Edit</Text>
+              <Text style={styles.editHint}>EDIT</Text>
             </View>
           </Pressable>
         )}
+        <View style={styles.divider} />
         <View style={styles.row}>
-          <UiIcon name="mail" size={17} color={COLORS.textSecondary} />
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.rowIndex}>02</Text>
+          <UiIcon name="mail" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.label}>EMAIL</Text>
         </View>
         <Text style={styles.value}>{user?.email ?? 'Unknown account'}</Text>
+        <View style={styles.divider} />
         <View style={styles.row}>
-          <UiIcon name="shield" size={17} color={COLORS.textSecondary} />
-          <Text style={styles.label}>User ID</Text>
+          <Text style={styles.rowIndex}>03</Text>
+          <UiIcon name="shield" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.label}>USER ID</Text>
         </View>
-        <Text style={styles.id}>{user?.id ?? 'Not available'}</Text>
+        <Text style={styles.id} numberOfLines={1}>{user?.id ?? 'Not available'}</Text>
       </View>
       {loading ? (
-        <ActivityIndicator color={COLORS.accent} />
+        <ActivityIndicator color={COLORS.primary} />
       ) : (
-        <AppButton title="Sign out" icon="logout" variant="danger" fullWidth onPress={handleSignOut} />
+        <AppButton title="Sign out" variant="danger" fullWidth onPress={handleSignOut} />
       )}
     </View>
   );
@@ -120,35 +127,36 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, padding: 20, paddingTop: 24 },
   heroCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
     backgroundColor: COLORS.primaryDeep,
     borderRadius: RADIUS.xl,
     padding: 18,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#FFFFFF22',
+    gap: 14,
     ...SHADOW.pop,
   },
-  avatarRing: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#FFFFFF22', borderWidth: 1, borderColor: '#FFFFFF44', alignItems: 'center', justifyContent: 'center' },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroIndex: { color: '#FFFFFF99', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, fontFamily: 'monospace' },
+  roleDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
+  heroMain: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: COLORS.primaryDeep, fontSize: 24, fontWeight: '800' },
+  avatarText: { color: COLORS.primary, fontSize: 24, fontWeight: '800' },
   identityText: { flex: 1, gap: 3 },
-  identityName: { color: '#FFFFFF', fontSize: 19, fontWeight: '800', letterSpacing: -0.2 },
-  identityEmail: { color: '#A7F3D0', fontSize: 13, fontWeight: '600' },
-  card: { backgroundColor: COLORS.card, borderRadius: RADIUS.xl, padding: 20, marginBottom: 20, gap: 6, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.card },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  label: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700' },
-  value: { color: COLORS.textPrimary, fontSize: 16, flex: 1 },
-  id: { color: COLORS.textSecondary, fontSize: 11 },
-  roleBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#FFFFFF1F', borderWidth: 1, borderColor: '#FFFFFF33', marginTop: 4 },
-  roleBadgeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
-  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
-  editPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${COLORS.primary}14`, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  nameEditRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  nameInput: { flex: 1, minHeight: 52, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.background, color: COLORS.textPrimary, paddingHorizontal: 12 },
-  saveButton: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingHorizontal: 18, minHeight: 52, justifyContent: 'center' },
-  saveButtonText: { color: COLORS.textOnPrimary, fontWeight: '800' },
-  editHint: { color: COLORS.primary, fontSize: 12, fontWeight: '800' },
+  identityName: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  identityEmail: { color: '#D6D3D1', fontSize: 13, fontWeight: '500' },
+  heroFoot: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: '#FFFFFF22', paddingTop: 12 },
+  roleBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  card: { backgroundColor: COLORS.card, borderRadius: RADIUS.lg, padding: 18, marginBottom: 20, gap: 8, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.card },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowIndex: { color: COLORS.textSecondary, fontSize: 10, fontWeight: '700', fontFamily: 'monospace' },
+  label: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  value: { color: COLORS.textPrimary, fontSize: 16, flex: 1, fontWeight: '600' },
+  id: { color: COLORS.textSecondary, fontSize: 11, fontFamily: 'monospace' },
+  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 8 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 40 },
+  editPill: { borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  nameEditRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  nameInput: { flex: 1, minHeight: 50, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderStrong, backgroundColor: COLORS.card, color: COLORS.textPrimary, paddingHorizontal: 12 },
+  saveButton: { backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingHorizontal: 20, minHeight: 50, justifyContent: 'center' },
+  saveButtonText: { color: COLORS.textOnPrimary, fontWeight: '700', fontSize: 13 },
+  editHint: { color: COLORS.textPrimary, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
 });

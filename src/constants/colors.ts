@@ -1,25 +1,24 @@
-// QR-att palette: Emerald/Forest Green + Slate Grey.
-// - Green  → key actions, success, scanner focal points, active/open status.
-// - Slate  → backgrounds, cards, borders, typography (charcoal text).
-// - White text ONLY on green fills (see textOnPrimary).
+// QR-att palette V2 — Editorial Mono.
+// Warm paper background, true-black ink, hairline borders.
+// Status is shape + label first, tone second (all monochrome).
 export const COLORS = {
-  primary: '#047857', // emerald-700 — key actions, active states
-  primaryDeep: '#065F46', // emerald-800 — hero / dark surfaces
-  primarySoft: '#ECFDF5', // emerald-50 — tinted tiles, pills
-  background: '#F8FAFC', // slate-50 — modern app background
-  card: '#FFFFFF', // white — cards over slate
-  textPrimary: '#0F172A', // slate-900 — modern ink
-  textSecondary: '#64748B', // slate-500 — muted text
-  textOnPrimary: '#FFFFFF', // white — text on green fills
-  surface: '#F1F5F9', // slate-100 — chips, inactive tracks
-  border: '#E2E8F0', // slate-200 — modern hairline
-  borderStrong: '#CBD5E1', // slate-300 — inputs
-  shadow: '#0F172A20',
-  warning: '#D97706', // amber-600
-  warningSoft: '#FFFBEB', // amber-50
-  success: '#059669', // emerald-600 — success, open badges
-  successSoft: '#ECFDF5', // emerald-50
-  danger: '#DC2626', // red-600
-  dangerSoft: '#FEF2F2', // red-50
-  accent: '#10B981', // emerald-500 — scanner focal points, highlights
+  primary: '#0C0A09', // stone-950 — key actions, active states
+  primaryDeep: '#000000', // true black — hero / dark surfaces
+  primarySoft: '#F5F5F4', // stone-100 — tinted tiles, pills
+  background: '#FAFAF9', // warm paper — app background
+  card: '#FFFFFF', // white — cards over paper
+  textPrimary: '#0C0A09', // stone-950 — ink
+  textSecondary: '#78716C', // stone-500 — muted text
+  textOnPrimary: '#FFFFFF', // white — text on black fills
+  surface: '#F5F5F4', // stone-100 — chips, inactive tracks
+  border: '#E7E5E4', // stone-200 — hairline
+  borderStrong: '#D6D3D1', // stone-300 — inputs
+  shadow: '#0C0A0920',
+  warning: '#57534E', // stone-600 — late / attention
+  warningSoft: '#F5F5F4', // stone-100
+  success: '#0C0A09', // stone-950 — success / open (solid black badge)
+  successSoft: '#F5F5F4', // stone-100
+  danger: '#44403C', // stone-700 — errors / closed
+  dangerSoft: '#F5F5F4', // stone-100
+  accent: '#0C0A09', // black — scanner focal points, highlights
 } as const;
