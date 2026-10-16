@@ -9,6 +9,10 @@ export type Event = {
   end: string;
   venue?: string;
   description?: string;
+  /** Check-in area for location verification — set all three or none. */
+  geofence?: { lat: number; lng: number; radiusM: number } | null;
+  /** When true, students must pass the face check before recording. */
+  requireFace?: boolean;
 };
 
 export type CloudEvent = {
@@ -22,11 +26,18 @@ export type CloudEvent = {
   status: EventStatus;
   created_by: string | null;
   created_at: string;
+  /** Geofence centre (null when the event has no location requirement). */
+  geofence: { lat: number; lng: number } | null;
+  geofenceRadiusM: number | null;
+  requireFace: boolean;
 };
 
 type EventRow = Record<string, unknown>;
 
 function toCloudEvent(row: EventRow): CloudEvent {
+  const lat = typeof row.geofence_lat === 'number' ? row.geofence_lat : null;
+  const lng = typeof row.geofence_lng === 'number' ? row.geofence_lng : null;
+  const radius = typeof row.geofence_radius_m === 'number' ? row.geofence_radius_m : null;
   return {
     id: String(row.id ?? ''),
     event_code: String(row.event_code ?? ''),
@@ -39,6 +50,9 @@ function toCloudEvent(row: EventRow): CloudEvent {
     status: (row.status as EventStatus) === 'closed' ? 'closed' : 'open',
     created_by: (row.created_by as string | null) ?? null,
     created_at: String(row.created_at ?? ''),
+    geofence: lat !== null && lng !== null && radius !== null && radius > 0 ? { lat, lng } : null,
+    geofenceRadiusM: radius !== null && radius > 0 ? radius : null,
+    requireFace: row.require_face === true,
   };
 }
 
@@ -62,14 +76,42 @@ export async function createEvent(event: Event): Promise<{ error: string | null 
     description: event.description?.trim() || null,
     status: 'open',
     created_by: user?.id ?? null,
+    // Smart Attendance: check-in area + face requirement.
+    geofence_lat: event.geofence?.lat ?? null,
+    geofence_lng: event.geofence?.lng ?? null,
+    geofence_radius_m: event.geofence?.radiusM ?? null,
+    require_face: event.requireFace === true,
   };
 
   // Try full payload first (with new columns), fall back to legacy columns
   // if the migration hasn't been run yet.
   let { error } = await supabase.from('events').upsert(base, { onConflict: 'event_code' });
-  if (error && /venue|description|status/i.test(error.message)) {
-    const { venue: _v, description: _d, status: _s, ...legacy } = base;
-    ({ error } = await supabase.from('events').upsert(legacy, { onConflict: 'event_code' }));
+  if (error) {
+    const missingSmart = /geofence|require_face/i.test(error.message);
+    const missingLegacy = /venue|description|status/i.test(error.message);
+    // Never silently drop a requirement the teacher opted into.
+    if (missingSmart && (event.geofence || event.requireFace)) {
+      return {
+        error:
+          'Smart Attendance columns are missing — run supabase/migrations/' +
+          '20261016020000_smart_attendance.sql in the Supabase SQL editor, then retry.',
+      };
+    }
+    if (missingSmart || missingLegacy) {
+      const legacy: Record<string, unknown> = { ...base };
+      if (missingLegacy) {
+        delete legacy.venue;
+        delete legacy.description;
+        delete legacy.status;
+      }
+      if (missingSmart) {
+        delete legacy.geofence_lat;
+        delete legacy.geofence_lng;
+        delete legacy.geofence_radius_m;
+        delete legacy.require_face;
+      }
+      ({ error } = await supabase.from('events').upsert(legacy, { onConflict: 'event_code' }));
+    }
   }
 
   return { error: error?.message ?? null };
@@ -136,6 +178,8 @@ export async function updateEvent(
     end?: string | null;
     venue?: string | null;
     description?: string | null;
+    geofence?: { lat: number; lng: number; radiusM: number } | null;
+    requireFace?: boolean;
   },
 ): Promise<{ error: string | null }> {
   const { error: permError } = await checkCanManage(eventUuid);
@@ -147,12 +191,41 @@ export async function updateEvent(
     ...(updates.end !== undefined ? { end_time: updates.end } : {}),
     ...(updates.venue !== undefined ? { venue: updates.venue } : {}),
     ...(updates.description !== undefined ? { description: updates.description } : {}),
+    ...(updates.geofence !== undefined
+      ? {
+          geofence_lat: updates.geofence?.lat ?? null,
+          geofence_lng: updates.geofence?.lng ?? null,
+          geofence_radius_m: updates.geofence?.radiusM ?? null,
+        }
+      : {}),
+    ...(updates.requireFace !== undefined ? { require_face: updates.requireFace } : {}),
   };
 
   let { error } = await supabase.from('events').update(full).eq('id', eventUuid);
-  if (error && /venue|description/i.test(error.message)) {
-    const { venue: _v, description: _d, ...legacy } = full;
-    ({ error } = await supabase.from('events').update(legacy).eq('id', eventUuid));
+  if (error) {
+    const missingSmart = /geofence|require_face/i.test(error.message);
+    const missingLegacy = /venue|description/i.test(error.message);
+    if (missingSmart && (updates.geofence || updates.requireFace)) {
+      return {
+        error:
+          'Smart Attendance columns are missing — run supabase/migrations/' +
+          '20261016020000_smart_attendance.sql in the Supabase SQL editor, then retry.',
+      };
+    }
+    if (missingSmart || missingLegacy) {
+      const legacy: Record<string, unknown> = { ...full };
+      if (missingLegacy) {
+        delete legacy.venue;
+        delete legacy.description;
+      }
+      if (missingSmart) {
+        delete legacy.geofence_lat;
+        delete legacy.geofence_lng;
+        delete legacy.geofence_radius_m;
+        delete legacy.require_face;
+      }
+      ({ error } = await supabase.from('events').update(legacy).eq('id', eventUuid));
+    }
   }
 
   return { error: error?.message ?? null };

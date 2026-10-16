@@ -8,10 +8,18 @@ import { EmptyState, ErrorNotice, LoadingState, StatusBadge } from '@/components
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { StatusIcon } from '@/components/StatusIcon';
 import { UiIcon } from '@/components/UiIcon';
-import { getArrivalStatus, getAttendanceHistory, getTeacherEventAttendance, type AttendanceRecord, type TeacherEventAttendance } from '@/lib/attendance';
+import { VerificationChips } from '@/components/VerificationChips';
+import {
+  getAttendanceHistory,
+  getTeacherEventAttendance,
+  resolveArrivalStatus,
+  type AttendanceRecord,
+  type StoredStatus,
+  type TeacherEventAttendance,
+} from '@/lib/attendance';
 import { listAllAttendance, type OverallAttendanceRow } from '@/lib/admin';
 import { useAuth } from '@/lib/auth';
-import { attendanceFileName, buildAttendanceCsv, shareCsv, type AttendanceCsvRow } from '@/lib/export';
+import { attendanceFileName, buildAttendanceCsv, faceCsvText, locationCsvText, shareCsv, type AttendanceCsvRow } from '@/lib/export';
 import type { Role } from '@/lib/profiles';
 import { getProfile } from '@/lib/profiles';
 import { clearScanHistory, getScanHistory, type ScanHistoryEntry } from '@/lib/scanHistory';
@@ -21,6 +29,8 @@ type DateFilter = 'all' | 'today' | 'week';
 type StatusFilter = 'all' | 'on-time' | 'late';
 
 // Unified row for search / filter / export across all roles.
+// Smart Attendance fields ride along so status/geofence/face can be
+// shown and exported (null/undefined on rows from before the migration).
 type ViewRow = {
   id: string;
   student: string;
@@ -29,6 +39,10 @@ type ViewRow = {
   eventTitle: string;
   scannedAt: string;
   startTime: string | null;
+  status?: StoredStatus | null;
+  locationStatus?: string | null;
+  faceStatus?: string | null;
+  distanceM?: number | null;
 };
 
 export default function HistoryScreen() {
@@ -113,6 +127,10 @@ export default function HistoryScreen() {
           eventTitle: event.title,
           scannedAt: a.scannedAt,
           startTime: event.startTime,
+          status: a.status ?? null,
+          locationStatus: a.locationStatus ?? null,
+          faceStatus: a.faceStatus ?? null,
+          distanceM: a.distanceM ?? null,
         })),
       );
     }
@@ -125,6 +143,10 @@ export default function HistoryScreen() {
         eventTitle: r.eventTitle,
         scannedAt: r.scannedAt,
         startTime: r.eventStart,
+        status: r.status ?? null,
+        locationStatus: r.locationStatus ?? null,
+        faceStatus: r.faceStatus ?? null,
+        distanceM: r.distanceM ?? null,
       }));
     }
     return studentRecords.map((r) => ({
@@ -135,6 +157,10 @@ export default function HistoryScreen() {
       eventTitle: r.eventTitle,
       scannedAt: r.scannedAt,
       startTime: r.startTime,
+      status: r.status ?? null,
+      locationStatus: r.locationStatus ?? null,
+      faceStatus: r.faceStatus ?? null,
+      distanceM: r.distanceM ?? null,
     }));
   }, [role, teacherEvents, systemRows, studentRecords]);
 
@@ -155,7 +181,8 @@ export default function HistoryScreen() {
         if (dateFilter === 'week' && age > 7 * dayMs) return false;
       }
       if (statusFilter !== 'all') {
-        const status = getArrivalStatus(r.scannedAt, r.startTime);
+        // Stored (DB-validated) status first; derived only for legacy rows.
+        const status = resolveArrivalStatus(r.status, r.scannedAt, r.startTime);
         if (statusFilter === 'on-time' && status !== 'On-Time') return false;
         if (statusFilter === 'late' && status !== 'Late') return false;
       }
@@ -173,7 +200,9 @@ export default function HistoryScreen() {
         eventCode: r.eventCode,
         eventTitle: r.eventTitle,
         scannedAt: new Date(r.scannedAt).toLocaleString(),
-        status: getArrivalStatus(r.scannedAt, r.startTime),
+        status: resolveArrivalStatus(r.status, r.scannedAt, r.startTime),
+        location: locationCsvText(r.locationStatus, r.distanceM),
+        face: faceCsvText(r.faceStatus),
       }));
       const { error: shareError } = await shareCsv(
         buildAttendanceCsv(rows),
@@ -335,7 +364,8 @@ function ScanEntryCard({ entry }: { entry: ScanHistoryEntry }) {
 }
 
 function RecordRow({ row, showStudent }: { row: ViewRow; showStudent: boolean }) {
-  const status = getArrivalStatus(row.scannedAt, row.startTime);
+  // Prefer the stored (DB-validated) status; derive only for legacy rows.
+  const status = resolveArrivalStatus(row.status, row.scannedAt, row.startTime);
   return (
     <View style={styles.record}>
       <StatusIcon status={status === 'Late' ? 'late' : status === 'On-Time' ? 'on-time' : 'generic'} size={24} />
@@ -349,6 +379,13 @@ function RecordRow({ row, showStudent }: { row: ViewRow; showStudent: boolean })
           {row.eventTitle} ({row.eventCode})
         </Text>
         <Text style={styles.date}>{new Date(row.scannedAt).toLocaleString()}</Text>
+        {/* Geofence / face evidence — arrival is the badge at right. */}
+        <VerificationChips
+          locationStatus={row.locationStatus}
+          distanceM={row.distanceM}
+          faceStatus={row.faceStatus}
+          align="left"
+        />
       </View>
       <ArrivalBadge status={status} />
     </View>

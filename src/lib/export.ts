@@ -7,6 +7,10 @@ export type AttendanceCsvRow = {
   eventTitle: string;
   scannedAt: string;
   status: string;
+  /** Geofence verdict — e.g. 'On-site (42 m)' / 'Not required'. */
+  location?: string;
+  /** Face verdict — 'Verified' / 'Not required'. */
+  face?: string;
 };
 
 function escapeCell(value: string): string {
@@ -17,10 +21,21 @@ function escapeCell(value: string): string {
 
 // Export options: build a CSV string from attendance rows (Excel opens CSVs
 // natively, so one format covers both CSV + Excel requirements).
+// Location/Face columns come from Smart Attendance — empty when the
+// row predates the migration (or the event had no requirements).
 export function buildAttendanceCsv(rows: AttendanceCsvRow[]): string {
-  const header = ['Student', 'Email', 'Event Code', 'Event Title', 'Scanned At', 'Status'];
+  const header = [
+    'Student',
+    'Email',
+    'Event Code',
+    'Event Title',
+    'Scanned At',
+    'Status',
+    'Location',
+    'Face',
+  ];
   const lines = rows.map((r) =>
-    [r.student, r.email, r.eventCode, r.eventTitle, r.scannedAt, r.status]
+    [r.student, r.email, r.eventCode, r.eventTitle, r.scannedAt, r.status, r.location ?? '', r.face ?? '']
       .map(escapeCell)
       .join(','),
   );
@@ -30,6 +45,23 @@ export function buildAttendanceCsv(rows: AttendanceCsvRow[]): string {
 export function attendanceFileName(prefix = 'qratt-attendance'): string {
   const stamp = new Date().toISOString().slice(0, 10);
   return `${prefix}-${stamp}.csv`;
+}
+
+// Cell renderers for the Smart Attendance columns — shared by History and
+// Admin exports so both produce identical CSV text ('' = row predates the
+// migration, or the event never required the check).
+export function locationCsvText(status?: string | null, distanceM?: number | null): string {
+  if (status === 'verified') {
+    return typeof distanceM === 'number' ? `On-site (${Math.round(distanceM)} m)` : 'On-site';
+  }
+  if (status === 'not_required') return 'Not required';
+  return '';
+}
+
+export function faceCsvText(status?: string | null): string {
+  if (status === 'verified') return 'Verified';
+  if (status === 'not_required') return 'Not required';
+  return '';
 }
 
 // Cross-platform share: web downloads via Blob; native writes a file and

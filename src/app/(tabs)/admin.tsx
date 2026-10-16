@@ -1,14 +1,22 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '@/constants/colors';
 import { EmptyState, LoadingState, StatusBadge } from '@/components/feedback';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { UiIcon } from '@/components/UiIcon';
-import { getArrivalStatus } from '@/lib/attendance';
-import { attendanceFileName, buildAttendanceCsv, shareCsv, type AttendanceCsvRow } from '@/lib/export';
-import { useRole } from '@/lib/auth';
+import { resolveArrivalStatus } from '@/lib/attendance';
+import {
+  attendanceFileName,
+  buildAttendanceCsv,
+  faceCsvText,
+  locationCsvText,
+  shareCsv,
+  type AttendanceCsvRow,
+} from '@/lib/export';
+import { useAuth, useRole } from '@/lib/auth';
+import { roleLabel } from '@/lib/roles';
 import {
   getSystemReport,
   listAllAttendance,
@@ -30,6 +38,7 @@ const ROLE_ORDER: Role[] = ['admin', 'teacher', 'student'];
 // Administrator capabilities: manage users, manage events, view overall
 // attendance, manage/correct attendance records, view system reports.
 export default function AdminScreen() {
+  const { user: currentUser } = useAuth();
   const { role, loading: roleLoading } = useRole();
   const [tab, setTab] = useState<Tab>('report');
   const [loading, setLoading] = useState(true);
@@ -38,8 +47,13 @@ export default function AdminScreen() {
   const [events, setEvents] = useState<CloudEvent[]>([]);
   const [attendance, setAttendance] = useState<OverallAttendanceRow[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+  // Monotonic load counter: a slow, older refresh must never overwrite a
+  // newer one (otherwise a pre-change response can repaint stale roles).
+  const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     const [r, u, e, a] = await Promise.all([
       getSystemReport(),
@@ -47,6 +61,7 @@ export default function AdminScreen() {
       listAllEvents(),
       listAllAttendance(),
     ]);
+    if (seq !== loadSeq.current) return; // superseded — drop stale response
     setReport(r);
     setUsers(u);
     setEvents(e);
@@ -73,17 +88,55 @@ export default function AdminScreen() {
     );
   }
 
-  const handleRoleChange = (user: Profile, next: Role) => {
-    if (user.role === next) return;
-    Alert.alert('Change role', `${user.email} → ${next}?`, [
+  const handleRoleChange = (target: Profile, next: Role) => {
+    if (target.role === next || savingRoleId !== null) return;
+    if (target.id === currentUser?.id && next !== 'admin') {
+      Alert.alert('Not allowed', 'You cannot remove your own Administrator role.');
+      return;
+    }
+    const displayName = target.full_name ?? target.email;
+    // Explicitly specify the old and new role so the admin confirms
+    // the exact change, e.g. "Juan (Teacher → Student)".
+    Alert.alert(`Change role to ${roleLabel(next)}?`, `${displayName} (${target.email})\nCurrent role: ${roleLabel(target.role)} (${target.role})\nNew role: ${roleLabel(next)} (${next})`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Confirm',
+        text: `Set to ${roleLabel(next)}`,
         onPress: () =>
           void (async () => {
-            const { error } = await setUserRole(user.id, next);
-            if (error) Alert.alert('Error', error);
-            else void load();
+            // Invalidate any in-flight refresh so its pre-change response
+            // can't repaint the list after we write the new role.
+            ++loadSeq.current;
+            setSavingRoleId(target.id);
+            try {
+              const { error } = await setUserRole(target.id, next);
+              if (error) {
+                Alert.alert('Role not changed', error);
+                return;
+              }
+              // Authoritative check: re-fetch the full list (no optimistic
+              // mapping — that hid RLS-blocked writes that returned no error).
+              const freshList = await listAllUsers();
+              setUsers(freshList);
+              const fresh = freshList.find((p) => p.id === target.id);
+              if (!fresh) {
+                Alert.alert('Role not changed', 'User disappeared from the list after update. Reload and retry.');
+                await load();
+                return;
+              }
+              if (fresh.role !== next) {
+                Alert.alert(
+                  'Role not changed',
+                  `${displayName} is still ${roleLabel(fresh.role)} (${fresh.role}). The database blocked the update — run supabase/migrations/20260919000000_admin_role_rbac.sql and supabase/migrations/20261016000000_set_user_role_rpc.sql in Supabase, then retry.`,
+                );
+                return;
+              }
+              Alert.alert('Role updated', `${displayName} is now ${roleLabel(next)} (${next}).`);
+              // The verified fresh list is already in state above; refresh
+              // reports/events/attendance counts in the background.
+              void load();
+            } finally {
+              setSavingRoleId(null);
+            }
           })(),
       },
     ]);
@@ -158,7 +211,9 @@ export default function AdminScreen() {
           eventCode: r.eventCode,
           eventTitle: r.eventTitle,
           scannedAt: new Date(r.scannedAt).toLocaleString(),
-          status: getArrivalStatus(r.scannedAt, r.eventStart),
+          status: resolveArrivalStatus(r.status, r.scannedAt, r.eventStart),
+          location: locationCsvText(r.locationStatus, r.distanceM),
+          face: faceCsvText(r.faceStatus),
         }));
         const { error } = await shareCsv(buildAttendanceCsv(rows), attendanceFileName('qratt-admin'));
         if (error) Alert.alert('Export failed', error);
@@ -195,8 +250,10 @@ export default function AdminScreen() {
         <View style={styles.warnCard}>
           <Text style={styles.warnTitle}>No data returned</Text>
           <Text style={styles.muted}>
-            Run supabase/migrations/20260919000000_admin_role_rbac.sql in the Supabase SQL editor,
-            then reload. Admin RLS policies are required for this screen.
+            Run supabase/migrations/20260919000000_admin_role_rbac.sql and
+            supabase/migrations/20261016000000_set_user_role_rpc.sql in the Supabase SQL editor,
+            then reload. Admin RLS policies + the set_user_role function are required — without
+            them, role changes are blocked and revert.
           </Text>
           <Pressable onPress={() => void load()} style={styles.retryBtn}>
             <Text style={styles.retryText}>Retry</Text>
@@ -244,15 +301,32 @@ export default function AdminScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>{item.full_name ?? 'Unnamed user'}</Text>
               <Text style={styles.muted}>{item.email}</Text>
+              <Text style={styles.currentRole}>
+                Current: {roleLabel(item.role)} ({item.role})
+                {item.id === currentUser?.id ? ' — you' : ''}
+              </Text>
+              <Text style={styles.mutedLeft}>Tap a role to change this account to that specific role:</Text>
               <View style={styles.roleRow}>
-                {ROLE_ORDER.map((r) => (
-                  <Pressable
-                    key={r}
-                    onPress={() => handleRoleChange(item, r)}
-                    style={[styles.roleChip, item.role === r && styles.roleChipActive]}>
-                    <Text style={[styles.roleText, item.role === r && styles.roleTextActive]}>{r}</Text>
-                  </Pressable>
-                ))}
+                {ROLE_ORDER.map((r) => {
+                  const saving = savingRoleId === item.id;
+                  return (
+                    <Pressable
+                      key={r}
+                      onPress={() => handleRoleChange(item, r)}
+                      disabled={saving}
+                      style={[
+                        styles.roleChip,
+                        item.role === r && styles.roleChipActive,
+                        saving && styles.roleChipDisabled,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set ${item.email} to ${roleLabel(r)}`}>
+                      <Text style={[styles.roleText, item.role === r && styles.roleTextActive]}>
+                        {saving ? '…' : roleLabel(r)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
           )}
@@ -366,10 +440,12 @@ const styles = StyleSheet.create({
   count: { color: COLORS.textSecondary, fontSize: 13, marginTop: 4 },
   empty: { color: COLORS.textSecondary, textAlign: 'center', marginTop: 24 },
   roleRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  roleChip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 44 },
+  roleChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 8, minHeight: 44 },
   roleChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  roleChipDisabled: { opacity: 0.5 },
   roleText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700' },
   roleTextActive: { color: COLORS.textOnPrimary },
+  currentRole: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '700' },
   deleteBtn: { marginTop: 8, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.danger, borderRadius: 10, paddingHorizontal: 12, minHeight: 44, justifyContent: 'center' },
   deleteText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   warnCard: { backgroundColor: COLORS.card, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: COLORS.border, gap: 8 },

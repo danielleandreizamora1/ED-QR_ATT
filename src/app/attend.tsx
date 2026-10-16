@@ -5,8 +5,11 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { COLORS } from '@/constants/colors';
 import { EmptyState, ErrorNotice, SuccessNotice } from '@/components/feedback';
+import { FaceCheckSheet } from '@/components/FaceCheckSheet';
+import { VerificationChips } from '@/components/VerificationChips';
 import { useAuth } from '@/lib/auth';
-import { registerAttendance } from '@/lib/attendance';
+import type { RegisterResult } from '@/lib/attendance';
+import { useCheckInFlow } from '@/hooks/useCheckInFlow';
 import { parseQRPayload } from '@/lib/qr';
 
 /**
@@ -34,8 +37,17 @@ export default function AttendScreen() {
   }>();
 
   const [status, setStatus] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<boolean | null>(null);
+  const [result, setResult] = useState<RegisterResult | null>(null);
+
+  // Smart Attendance: validate → face gate (if required) → record. The
+  // outcome arrives here once, regardless of which stage produced it.
+  const flow = useCheckInFlow((res) => {
+    setResult(res);
+    setStatus(res.message);
+    setSuccess(res.success);
+  });
+  const busy = flow.busy || flow.faceGate !== null;
 
   // Reconstruct raw payload for parse + register — use current URL if available
   const rawPayload = useMemo(() => {
@@ -69,18 +81,11 @@ export default function AttendScreen() {
       router.push('/login');
       return;
     }
-    setSubmitting(true);
     setStatus(null);
-    try {
-      const result = await registerAttendance(rawPayload, user.id);
-      setStatus(result.message);
-      setSuccess(result.success);
-    } catch {
-      setStatus('Could not connect to attendance service.');
-      setSuccess(false);
-    } finally {
-      setSubmitting(false);
-    }
+    setResult(null);
+    // Two-stage pipeline: guards + geofence first, face gate when the event
+    // requires it, then the actual recording.
+    await flow.start(rawPayload);
   };
 
   const handleOpenInApp = () => {
@@ -135,10 +140,10 @@ export default function AttendScreen() {
       <View style={styles.actions}>
         <Pressable
           onPress={handleRegister}
-          disabled={submitting}
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed, submitting && styles.disabled]}
+          disabled={busy}
+          style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed, busy && styles.disabled]}
         >
-          {submitting ? (
+          {busy ? (
             <ActivityIndicator color={COLORS.textOnPrimary} />
           ) : (
             <Text style={styles.primaryBtnText}>{user ? 'Confirm attendance' : 'Log in to confirm'}</Text>
@@ -155,11 +160,28 @@ export default function AttendScreen() {
       </View>
 
       {status && success ? (
-        <SuccessNotice title={status} detail="Your check-in was recorded." />
+        <>
+          <SuccessNotice title={status} detail="Your check-in was recorded." />
+          {/* Arrival status, geofence distance, face proof. */}
+          <VerificationChips
+            arrival={result?.arrivalStatus}
+            locationStatus={result?.location?.status}
+            distanceM={result?.location?.distanceM}
+            faceStatus={result?.face?.status}
+          />
+        </>
       ) : status ? (
         <ErrorNotice message={status} />
       ) : null}
       {rawPayload && <Text style={styles.urlText}>{rawPayload}</Text>}
+
+      {/* Face gate for events that require a face check before recording. */}
+      <FaceCheckSheet
+        visible={flow.faceGate !== null}
+        eventTitle={flow.faceGate?.eventTitle}
+        onVerified={(proof) => flow.faceGate?.onVerified(proof)}
+        onCancel={(reason) => flow.faceGate?.onCancel(reason)}
+      />
     </View>
   );
 }

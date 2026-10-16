@@ -9,6 +9,7 @@ import { COLORS } from '@/constants/colors';
 import { EmptyState, ErrorNotice, LoadingState, StatusBadge, SuccessNotice } from '@/components/feedback';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { UiIcon } from '@/components/UiIcon';
+import { VerificationChips } from '@/components/VerificationChips';
 import { useAuth } from '@/lib/auth';
 import { sanitize, validateEventCode, validateRequired } from '@/lib/validation';
 import {
@@ -26,21 +27,46 @@ import { getProfile } from '@/lib/profiles';
 import { canCreateEvents } from '@/lib/roles';
 import {
   getTeacherEventAttendance,
+  resolveArrivalStatus,
   type TeacherEventAttendance,
   type TeacherEventSummary,
 } from '@/lib/attendance';
 import { listAllAttendance } from '@/lib/admin';
+import { captureCurrentLocation } from '@/lib/geo';
 import { buildQRPayload } from '@/lib/qr';
 
 type Mode = 'create' | 'manage';
 
-function toLocalISO(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+// Serialize the picked local date/time as an ABSOLUTE instant (UTC with Z).
+// A naive "2026-10-16T08:00:00" is interpreted by Postgres (UTC session) as
+// 08:00 UTC — hours off for non-UTC devices — so check-ins at the exact class
+// time were rejected with "Event has not started yet." toISOString() keeps the
+// wall-clock the teacher picked correct on every device.
+function toStoredISO(date: Date) {
+  return date.toISOString();
 }
 
 function formatDateTime(date: Date) {
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function parseRadiusM(text: string): number | null {
+  const value = Number(text.trim());
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Check-in area payload: centre + radius must come as a set (matches the
+ * events_geofence_check constraint) — any missing part means "no fence".
+ */
+function buildGeofence(
+  lat: number | null,
+  lng: number | null,
+  radiusText: string,
+): { lat: number; lng: number; radiusM: number } | null {
+  const radiusM = parseRadiusM(radiusText);
+  if (lat === null || lng === null || radiusM === null) return null;
+  return { lat, lng, radiusM };
 }
 
 // Teacher + Admin: Create an event • View events • Edit an event •
@@ -66,6 +92,13 @@ export default function TeacherScreen() {
   const [payload, setPayload] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Smart Attendance — create form: check-in area (geofence) + face gate.
+  const [geofenceLat, setGeofenceLat] = useState<number | null>(null);
+  const [geofenceLng, setGeofenceLng] = useState<number | null>(null);
+  const [radiusText, setRadiusText] = useState('100');
+  const [requireFace, setRequireFace] = useState(false);
+  const [geoBusy, setGeoBusy] = useState(false);
+
   // Manage-list state
   const [events, setEvents] = useState<CloudEvent[]>([]);
   const [listLoading, setListLoading] = useState(false);
@@ -73,6 +106,11 @@ export default function TeacherScreen() {
   const [editTitle, setEditTitle] = useState('');
   const [editVenue, setEditVenue] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  // Smart Attendance — edit form mirrors of the create controls.
+  const [editLat, setEditLat] = useState<number | null>(null);
+  const [editLng, setEditLng] = useState<number | null>(null);
+  const [editRadiusText, setEditRadiusText] = useState('');
+  const [editRequireFace, setEditRequireFace] = useState(false);
   // Teacher capabilities: monitor attendance + view summaries per event.
   const [summaries, setSummaries] = useState<TeacherEventSummary[]>([]);
   const [attendanceDetail, setAttendanceDetail] = useState<TeacherEventAttendance | null>(null);
@@ -185,13 +223,22 @@ export default function TeacherScreen() {
     const event: Event = {
       eventId: eventId.trim(),
       title: sanitize(title, 120),
-      start: toLocalISO(startDate),
-      end: toLocalISO(endDate),
+      start: toStoredISO(startDate),
+      end: toStoredISO(endDate),
       venue: sanitize(venue, 120),
       description: sanitize(description, 500),
+      geofence: buildGeofence(geofenceLat, geofenceLng, radiusText),
+      requireFace,
     };
     if (endDate.getTime() <= startDate.getTime()) {
       setMessage('Start time must be before end time.');
+      setPayload(null);
+      return;
+    }
+    // A captured centre without a usable radius would be silently dropped —
+    // refuse instead of saving a check-in area the teacher thinks is active.
+    if (geofenceLat !== null && geofenceLng !== null && !event.geofence) {
+      setMessage('Enter a check-in radius greater than 0 metres, or clear the check-in point.');
       setPayload(null);
       return;
     }
@@ -209,6 +256,10 @@ export default function TeacherScreen() {
       setEventId('');
       setVenue('');
       setDescription('');
+      setGeofenceLat(null);
+      setGeofenceLng(null);
+      setRadiusText('100');
+      setRequireFace(false);
       void loadEvents();
     } catch {
       setMessage('Could not save the event. Please try again.');
@@ -216,11 +267,43 @@ export default function TeacherScreen() {
     }
   };
 
+  // Smart Attendance: pin the geofence centre to the teacher's current spot.
+  const handleUseMyLocation = async () => {
+    setGeoBusy(true);
+    const result = await captureCurrentLocation();
+    setGeoBusy(false);
+    if ('error' in result) {
+      setMessage(result.error);
+      setPayload(null);
+      return;
+    }
+    setGeofenceLat(result.lat);
+    setGeofenceLng(result.lng);
+    setMessage(null);
+  };
+
+  const handleEditUseMyLocation = async () => {
+    setGeoBusy(true);
+    const result = await captureCurrentLocation();
+    setGeoBusy(false);
+    if ('error' in result) {
+      Alert.alert('Check-in area', result.error);
+      return;
+    }
+    setEditLat(result.lat);
+    setEditLng(result.lng);
+  };
+
   const openDetail = (item: CloudEvent) => {
     setSelected(item);
     setEditTitle(item.title);
     setEditVenue(item.venue ?? '');
     setEditDescription(item.description ?? '');
+    // Smart Attendance: seed the edit controls from the stored settings.
+    setEditLat(item.geofence?.lat ?? null);
+    setEditLng(item.geofence?.lng ?? null);
+    setEditRadiusText(item.geofenceRadiusM ? String(Math.round(item.geofenceRadiusM)) : '');
+    setEditRequireFace(item.requireFace === true);
     // Monitor attendance: load the per-event attendee list for the detail view.
     setAttendanceDetail(null);
     if (user) {
@@ -248,6 +331,10 @@ export default function TeacherScreen() {
               studentName: r.studentName,
               studentEmail: r.studentEmail,
               scannedAt: r.scannedAt,
+              status: r.status ?? null,
+              locationStatus: r.locationStatus ?? null,
+              faceStatus: r.faceStatus ?? null,
+              distanceM: r.distanceM ?? null,
             })),
           });
         }
@@ -261,16 +348,33 @@ export default function TeacherScreen() {
       setMessage('Event name cannot be empty.');
       return;
     }
+    const geofence = buildGeofence(editLat, editLng, editRadiusText);
+    // Captured centre without a valid radius must fail loudly, not silently
+    // save as "no check-in area".
+    if ((editLat !== null || editLng !== null) && !geofence) {
+      Alert.alert('Check-in area', 'Enter a radius greater than 0 metres, or clear the check-in point.');
+      return;
+    }
     const { error } = await updateEvent(selected.id, {
       title: editTitle.trim(),
       venue: editVenue.trim() || null,
       description: editDescription.trim() || null,
+      geofence,
+      requireFace: editRequireFace,
     });
     if (error) {
       Alert.alert('Error', error);
       return;
     }
-    setSelected({ ...selected, title: editTitle.trim(), venue: editVenue.trim() || null, description: editDescription.trim() || null });
+    setSelected({
+      ...selected,
+      title: editTitle.trim(),
+      venue: editVenue.trim() || null,
+      description: editDescription.trim() || null,
+      geofence: geofence ? { lat: geofence.lat, lng: geofence.lng } : null,
+      geofenceRadiusM: geofence ? geofence.radiusM : null,
+      requireFace: editRequireFace,
+    });
     void loadEvents();
   };
 
@@ -352,6 +456,61 @@ export default function TeacherScreen() {
                 </Pressable>
               ))}
             </View>
+
+            {/* Smart Attendance: check-in area + face gate requirements. */}
+            <View style={styles.fenceCard}>
+              <Text style={styles.label}>Check-in area (optional)</Text>
+              <Text style={styles.fenceHint}>
+                When set, students must be within the radius of this point to check in. Leave the point unset for no
+                location check.
+              </Text>
+              <Pressable
+                onPress={() => void handleUseMyLocation()}
+                disabled={geoBusy}
+                style={[styles.locBtn, geoBusy && styles.disabledRow]}
+                accessibilityRole="button"
+              >
+                <UiIcon name="pin" size={16} color={COLORS.textPrimary} />
+                <Text style={styles.locBtnText}>
+                  {geoBusy
+                    ? 'Reading location…'
+                    : geofenceLat !== null
+                      ? 'Update check-in point'
+                      : 'Use my current location'}
+                </Text>
+              </Pressable>
+              {geofenceLat !== null && geofenceLng !== null ? (
+                <View style={styles.fenceMetaRow}>
+                  <Text style={styles.fenceMeta} numberOfLines={1}>
+                    {geofenceLat.toFixed(5)}, {geofenceLng.toFixed(5)}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setGeofenceLat(null);
+                      setGeofenceLng(null);
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear check-in point"
+                  >
+                    <UiIcon name="x" size={15} color={COLORS.textSecondary} />
+                  </Pressable>
+                </View>
+              ) : null}
+              <Field
+                label="Radius (metres)"
+                value={radiusText}
+                onChangeText={setRadiusText}
+                placeholder="100"
+                keyboardType="number-pad"
+              />
+              <ToggleField
+                label="Require face check"
+                hint="Students must pass an in-app face check before attendance is recorded."
+                value={requireFace}
+                onChange={setRequireFace}
+              />
+            </View>
           </View>
           {editTarget && <DateTimePicker value={editTarget === 'start' ? startDate : endDate} mode={Platform.OS === 'android' ? editingPart : 'datetime'} display={Platform.OS === 'android' ? 'default' : 'spinner'} onChange={onPickerChange} />}
           <Pressable onPress={handleCreateEvent} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
@@ -388,6 +547,16 @@ export default function TeacherScreen() {
           </Text>
           {selected.venue ? <Text style={styles.detailLine}>Venue: {selected.venue}</Text> : null}
           {selected.description ? <Text style={styles.detailLine}>{selected.description}</Text> : null}
+          {/* Smart Attendance requirements for this event. */}
+          <Text style={styles.detailLine}>
+            Check-in area:{' '}
+            {selected.geofence && selected.geofenceRadiusM
+              ? `within ${Math.round(selected.geofenceRadiusM)} m of ${selected.geofence.lat.toFixed(5)}, ${selected.geofence.lng.toFixed(5)}`
+              : 'not set — any location accepted'}
+          </Text>
+          <Text style={styles.detailLine}>
+            Face check: {selected.requireFace ? 'required before check-in' : 'not required'}
+          </Text>
 
           <Text style={styles.sectionTitle}>
             Attendance — {attendanceDetail ? `${attendanceDetail.attendeeCount} checked in` : 'loading…'}
@@ -400,6 +569,14 @@ export default function TeacherScreen() {
                     {a.studentName ?? a.studentEmail ?? a.studentId.slice(0, 8)}
                   </Text>
                   <Text style={styles.attendeeTime}>{new Date(a.scannedAt).toLocaleString()}</Text>
+                  {/* Evidence: arrival status, distance, face proof. */}
+                  <VerificationChips
+                    arrival={resolveArrivalStatus(a.status, a.scannedAt, attendanceDetail.startTime)}
+                    locationStatus={a.locationStatus}
+                    distanceM={a.distanceM}
+                    faceStatus={a.faceStatus}
+                    align="left"
+                  />
                 </View>
               ))}
               {attendanceDetail.attendees.length > 20 ? (
@@ -414,6 +591,58 @@ export default function TeacherScreen() {
           <Field label="Event name" value={editTitle} onChangeText={setEditTitle} placeholder="Event name" />
           <Field label="Venue" value={editVenue} onChangeText={setEditVenue} placeholder="Venue" />
           <Field label="Description" value={editDescription} onChangeText={setEditDescription} placeholder="Description" multiline />
+
+          {/* Smart Attendance: edit the check-in area + face requirement. */}
+          <View style={styles.fenceCard}>
+            <Text style={styles.label}>Check-in area (optional)</Text>
+            <Pressable
+              onPress={() => void handleEditUseMyLocation()}
+              disabled={geoBusy}
+              style={[styles.locBtn, geoBusy && styles.disabledRow]}
+              accessibilityRole="button"
+            >
+              <UiIcon name="pin" size={16} color={COLORS.textPrimary} />
+              <Text style={styles.locBtnText}>
+                {geoBusy
+                  ? 'Reading location…'
+                  : editLat !== null
+                    ? 'Update check-in point'
+                    : 'Use my current location'}
+              </Text>
+            </Pressable>
+            {editLat !== null && editLng !== null ? (
+              <View style={styles.fenceMetaRow}>
+                <Text style={styles.fenceMeta} numberOfLines={1}>
+                  {editLat.toFixed(5)}, {editLng.toFixed(5)}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setEditLat(null);
+                    setEditLng(null);
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear check-in point"
+                >
+                  <UiIcon name="x" size={15} color={COLORS.textSecondary} />
+                </Pressable>
+              </View>
+            ) : null}
+            <Field
+              label="Radius (metres)"
+              value={editRadiusText}
+              onChangeText={setEditRadiusText}
+              placeholder="100"
+              keyboardType="number-pad"
+            />
+            <ToggleField
+              label="Require face check"
+              hint="Students must pass an in-app face check before attendance is recorded."
+              value={editRequireFace}
+              onChange={setEditRequireFace}
+            />
+          </View>
+
           <Pressable onPress={handleSaveEdit} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
             <UiIcon name="check" size={18} color={COLORS.textOnPrimary} />
             <Text style={styles.buttonText}>Save changes</Text>
@@ -459,15 +688,70 @@ export default function TeacherScreen() {
   );
 }
 
-function Field({ label, value, onChangeText, placeholder, multiline, icon }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; multiline?: boolean; icon?: 'edit' | 'qr' | 'pin' }) {
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+  icon,
+  keyboardType,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+  icon?: 'edit' | 'qr' | 'pin';
+  keyboardType?: 'default' | 'number-pad' | 'numeric';
+}) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <View style={[styles.inputWrap, multiline && styles.inputWrapMultiline]}>
         {icon ? <UiIcon name={icon} size={17} color={COLORS.textSecondary} /> : null}
-        <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={COLORS.textSecondary} style={[styles.inputInner, multiline && styles.inputMultiline]} multiline={multiline} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.textSecondary}
+          style={[styles.inputInner, multiline && styles.inputMultiline]}
+          multiline={multiline}
+          keyboardType={keyboardType}
+        />
       </View>
     </View>
+  );
+}
+
+// Monochrome switch for the face requirement — ink fill + position carry the
+// state (plus the accessibility "switch" role), no color-only signalling.
+function ToggleField({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      onPress={() => onChange(!value)}
+      style={styles.toggleRow}
+    >
+      <View style={styles.toggleTexts}>
+        <Text style={styles.label}>{label}</Text>
+        {hint ? <Text style={styles.toggleHint}>{hint}</Text> : null}
+      </View>
+      <View style={[styles.toggleTrack, value && styles.toggleTrackOn]}>
+        <View style={[styles.toggleThumb, value && styles.toggleThumbOn]} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -537,4 +821,55 @@ const styles = StyleSheet.create({
   attendeeRow: { backgroundColor: COLORS.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: COLORS.border, gap: 2 },
   attendeeName: { color: COLORS.textPrimary, fontSize: 14, fontWeight: '700' },
   attendeeTime: { color: COLORS.textSecondary, fontSize: 12 },
+  // Smart Attendance controls.
+  fenceCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  fenceHint: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 17 },
+  locBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+  },
+  locBtnText: { color: COLORS.textPrimary, fontSize: 14, fontWeight: '700' },
+  fenceMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fenceMeta: { flex: 1, color: COLORS.textSecondary, fontSize: 12, fontFamily: 'monospace' },
+  disabledRow: { opacity: 0.6 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 },
+  toggleTexts: { flex: 1 },
+  toggleHint: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  toggleTrack: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+    padding: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  toggleTrackOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary, justifyContent: 'flex-end' },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  toggleThumbOn: { backgroundColor: COLORS.textOnPrimary, borderColor: COLORS.textOnPrimary },
 });

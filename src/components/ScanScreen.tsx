@@ -4,13 +4,16 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import AppButton from '@/components/AppButton';
 import { EmptyArt } from '@/components/EmptyArt';
+import { FaceCheckSheet } from '@/components/FaceCheckSheet';
 import { StatusIcon } from '@/components/StatusIcon';
 import { Toast, type ToastData } from '@/components/Toast';
 import { UiIcon } from '@/components/UiIcon';
+import { VerificationChips } from '@/components/VerificationChips';
 import { COLORS } from '@/constants/colors';
 import { RADIUS, SHADOW } from '@/constants/ui';
+import { useCheckInFlow } from '@/hooks/useCheckInFlow';
 import { useAuth } from '@/lib/auth';
-import { registerAttendance, type RegisterResult } from '@/lib/attendance';
+import type { RegisterResult } from '@/lib/attendance';
 import { parseQRPayload } from '@/lib/qr';
 import { saveScanHistory } from '@/lib/scanHistory';
 
@@ -20,8 +23,10 @@ const RESCAN_WINDOW_MS = 6000;
 
 // QR Attendance flow:
 // 1. Admin creates an event (Event tab)  2. System generates a QR
-// 3. Student scans it here                          4. System validates event
-// 5. System records attendance                      6. Student gets confirmation
+// 3. Student scans the QR here
+// 4. useCheckInFlow validates: auth → payload → event → window → geofence
+//    → face gate (when required)              5. System records attendance
+// 6. Student gets confirmation + verification chips
 export default function ScanScreen() {
   const { user } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
@@ -34,6 +39,20 @@ export default function ScanScreen() {
   const showToast = (success: boolean, title: string, detail?: string) => {
     setToast({ id: Date.now(), success, title, detail });
   };
+
+  // Single outcome handler for QR scans: report the verdict, then keep a
+  // copy in the History tab (best-effort).
+  const flow = useCheckInFlow(async (res, raw) => {
+    setResult(res);
+    showToast(res.success, res.message, res.eventTitle ?? res.eventCode);
+    if (user) {
+      try {
+        await saveScanHistory(user.id, raw, res);
+      } catch {
+        // History logging is best-effort — the attendance row already exists.
+      }
+    }
+  });
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -63,11 +82,13 @@ export default function ScanScreen() {
     const trimmed = data.trim();
 
     // Anti-duplication (short window): same QR re-emitted by the sensor
-    // within RESCAN_WINDOW_MS is acknowledged but NOT re-recorded.
+    // within RESCAN_WINDOW_MS is acknowledged but NOT re-recorded — the
+    // attendance is (being) saved by the first scan, so report it as
+    // detected, never as a failure.
     const now = Date.now();
     const last = lastScanRef.current;
     if (last && last.data === trimmed && now - last.at < RESCAN_WINDOW_MS) {
-      showToast(false, 'Already scanned — wait a moment', 'Duplicate scan ignored');
+      showToast(true, 'Scan Detected!', 'Duplicate ignored — already recorded');
       return;
     }
     lastScanRef.current = { data: trimmed, at: now };
@@ -76,25 +97,20 @@ export default function ScanScreen() {
     // attempting attendance — still saved to history for the History tab.
     const parsed = parseQRPayload(trimmed);
     if (!parsed.ok && trimmed.length > 0) {
-      const generic: RegisterResult = { success: true, message: 'Scan detected — saved to history' };
+      const generic: RegisterResult = { success: true, message: 'Scan Detected!' };
       setResult(generic);
-      showToast(true, 'Scan detected', 'Saved to history');
-      await saveScanHistory(uid, data, generic);
+      showToast(true, 'Scan Detected!', 'Saved to history');
+      try {
+        await saveScanHistory(uid, data, generic);
+      } catch {
+        // Best-effort history logging.
+      }
       return;
     }
 
-    try {
-      const res = await registerAttendance(data, uid);
-      setResult(res);
-      // Real-time feedback: instant toast on top of the camera view.
-      showToast(res.success, res.message, res.eventTitle ?? res.eventCode);
-      await saveScanHistory(uid, data, res);
-    } catch {
-      const fallback: RegisterResult = { success: false, message: 'Could not connect to attendance service. Try again.' };
-      setResult(fallback);
-      showToast(false, fallback.message);
-      await saveScanHistory(uid, data, fallback);
-    }
+    // Smart Attendance: validate (event, window, geofence, face gate) and
+    // record — outcome arrives through the shared handler above.
+    await flow.start(data);
   };
 
   const handleScanAgain = () => {
@@ -105,8 +121,6 @@ export default function ScanScreen() {
     // Reset the cooldown so the next intentional scan always goes through.
     lastScanRef.current = null;
   };
-
-  const success = result?.success ?? false;
 
   return (
     <View style={styles.container}>
@@ -130,20 +144,36 @@ export default function ScanScreen() {
         <View style={styles.handle} />
         <View style={styles.overlayHeader}>
           <UiIcon name="scan" size={15} color={COLORS.textSecondary} />
-          <Text style={styles.overlayText}>{scanned ? 'SCAN DETECTED' : 'SCAN EVENT QR CODE'}</Text>
+          <Text style={styles.overlayText}>
+            {scanned ? 'SCAN DETECTED' : 'SCAN EVENT QR CODE'}
+          </Text>
         </View>
-        {!scanned ? (
+        {scanned && !result ? (
+          // Scan is being verified (result not back yet) — never flash a
+          // failure before we know the outcome.
+          <View style={styles.confirmCard}>
+            <StatusIcon status="generic" size={28} />
+            <Text style={styles.confirmTitleError}>Checking scan…</Text>
+          </View>
+        ) : !scanned ? (
           <Text style={styles.helperText}>Point the camera at the event QR shown by your teacher.</Text>
         ) : result?.success ? (
-          // Step 6: confirmation — event, code, timestamp.
+          // Step 6: confirmation — event, code, timestamp + verification chips
+          // (arrival status, geofence distance, face proof).
           <View style={styles.confirmCard}>
-            <StatusIcon status="present" size={32} />
+            <StatusIcon status={result.arrivalStatus === 'Late' ? 'late' : 'present'} size={32} />
             <Text style={styles.confirmTitle}>{result.message}</Text>
             {result.eventTitle ? <Text style={styles.confirmEvent}>{result.eventTitle}</Text> : null}
             {result.eventCode ? <Text style={styles.confirmCode}>{result.eventCode}</Text> : null}
             <Text style={styles.confirmTime}>
               {result.scannedAt ? new Date(result.scannedAt).toLocaleString() : new Date().toLocaleString()}
             </Text>
+            <VerificationChips
+              arrival={result.arrivalStatus}
+              locationStatus={result.location?.status}
+              distanceM={result.location?.distanceM}
+              faceStatus={result.face?.status}
+            />
           </View>
         ) : (
           <View style={styles.confirmCard}>
@@ -154,8 +184,19 @@ export default function ScanScreen() {
             {lastData ? <Text style={styles.scanData} numberOfLines={2}>{lastData}</Text> : null}
           </View>
         )}
-        {scanned && <AppButton theme="primary" title="Scan again" icon="refresh" onPress={handleScanAgain} />}
+        {scanned && (
+          <AppButton theme="primary" title="Scan again" icon="refresh" onPress={handleScanAgain} />
+        )}
       </View>
+
+      {/* Face gate: opens only when the event requires a face check; the
+          check-in resumes with the verified selfie (or reports cancelled). */}
+      <FaceCheckSheet
+        visible={!!flow.faceGate}
+        eventTitle={flow.faceGate?.eventTitle}
+        onVerified={(proof) => flow.faceGate?.onVerified(proof)}
+        onCancel={(reason) => flow.faceGate?.onCancel(reason)}
+      />
     </View>
   );
 }

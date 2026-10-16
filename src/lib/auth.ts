@@ -72,33 +72,32 @@ export async function signUp(email: string, password: string, profile?: SignUpPr
 }
 
 async function syncProfileFromMetadata(user: User) {
-  const metaRole = user.user_metadata?.role as string | undefined;
+  // Repair ONLY the display name from sign-up metadata.
+  //
+  // Role is deliberately never synced here: raw_user_meta_data.role is frozen
+  // at registration and would silently UNDO admin role changes on every login
+  // (teacher → student reverts to teacher because metadata still says teacher).
+  // Roles are written once by the handle_new_user trigger at sign-up and can
+  // only change afterwards through admin setUserRole().
   const metaName = user.user_metadata?.full_name as string | undefined;
-  const validRole: Role | null =
-    metaRole === 'teacher' || metaRole === 'student' || metaRole === 'admin' ? metaRole : null;
-  if (!validRole && !metaName) return;
-  // Never downgrade an admin from stale metadata.
+  const name = typeof metaName === 'string' ? metaName.trim() : '';
+  if (!name) return;
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, full_name')
+    .select('full_name')
     .eq('id', user.id)
     .maybeSingle();
-  if ((profile as { role?: string } | null)?.role === 'admin') return;
-  const needsRoleUpdate = validRole !== null && profile?.role !== validRole;
-  const needsNameUpdate = Boolean(metaName && !profile?.full_name && metaName.trim().length > 0);
-  if (!needsRoleUpdate && !needsNameUpdate) return;
-  const updates: Record<string, string> = {};
-  if (needsRoleUpdate) updates.role = validRole!;
-  if (needsNameUpdate) updates.full_name = metaName!.trim();
-  await supabase.from('profiles').update(updates).eq('id', user.id);
+  const currentName = (profile as { full_name?: string | null } | null)?.full_name;
+  if (!profile || currentName) return;
+  await supabase.from('profiles').update({ full_name: name }).eq('id', user.id);
 }
 
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (!error && data.session) {
     setAuth(data.session);
-    // Repair profiles that were created before handle_new_user respected metadata
-    // (user registered as teacher but got default 'student').
+    // Repair missing display names only — roles are never touched on sign-in
+    // (see syncProfileFromMetadata; syncing role here undid admin changes).
     await syncProfileFromMetadata(data.session.user);
   }
   return { data, error };
